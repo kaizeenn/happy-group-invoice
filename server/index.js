@@ -42,6 +42,10 @@ async function fetchInvoices() {
 async function writeInvoice(conn, incoming, userId) {
   const invoice = { ...incoming, id: incoming.id || crypto.randomUUID() };
   const fields = [invoice.number, invoice.issueDate, invoice.companyAddress || '', invoice.customer, invoice.customerAddress || '', invoice.customerPhone || '', invoice.paymentStatus || 'auto', invoice.terms || '', invoice.notes || '', userId];
+  // A duplicate invoice number may belong to a previous client-generated UUID.
+  // Resolve that row first, so children always use the actual parent id.
+  const existing = await conn.execute('SELECT id FROM invoices WHERE id = ? OR number = ? LIMIT 1', [invoice.id, invoice.number]);
+  if (existing[0].length) invoice.id = existing[0][0].id;
   await conn.execute(`INSERT INTO invoices (id, number, issue_date, company_address, customer, customer_address, customer_phone, payment_status, terms, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE number=VALUES(number), issue_date=VALUES(issue_date), company_address=VALUES(company_address), customer=VALUES(customer), customer_address=VALUES(customer_address), customer_phone=VALUES(customer_phone), payment_status=VALUES(payment_status), terms=VALUES(terms), notes=VALUES(notes)`, [invoice.id, ...fields]);
   await conn.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [invoice.id]);
   await conn.execute('DELETE FROM payments WHERE invoice_id = ?', [invoice.id]);
