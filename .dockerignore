@@ -1,0 +1,16 @@
+node_modules
+.git
+.dart_tool
+build
+dist
+android
+linux
+windows
+web
+lib
+test
+.idea
+*.iml
+*.pdf
+.env
+server/data
