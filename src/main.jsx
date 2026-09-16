@@ -97,22 +97,25 @@ function PdfPreview({ invoice, onClose, onEdit, onAddPayment }) {
       const money = value => `Rp${Number(value || 0).toLocaleString('id-ID')}`;
       const invoiceDate = dateId.format(new Date(`${invoice.issueDate}T00:00:00`));
       const companyLines = pdf.splitTextToSize(`Kantor: ${invoice.companyAddress || '-'}`, 72);
+      // Header positions are calculated from the real address length. This prevents
+      // a multi-line office address from colliding with the telephone or invoice data.
+      const companyTextY = 20, companyLineHeight = 3.4, phoneY = companyTextY + companyLines.length * companyLineHeight + 2, headerRuleY = phoneY + 6;
 
       pdf.addImage(logo, 'PNG', margin, 13, 54, 20);
       pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...ink); pdf.setFontSize(11); pdf.text('PT. HAPPY TRANS HARYADI', 194, 15, { align: 'right' });
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.text(companyLines, 194, 20, { align: 'right' });
-      pdf.text('+62 811-2867-917', 194, 30, { align: 'right' });
-      pdf.setDrawColor(...red); pdf.setLineWidth(1); pdf.line(margin, 39, 194, 39);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.text(companyLines, 194, companyTextY, { align: 'right', lineHeightFactor: 1.12 });
+      pdf.setFontSize(7); pdf.text('+62 811-2867-917', 194, phoneY, { align: 'right' });
+      pdf.setDrawColor(...red); pdf.setLineWidth(1); pdf.line(margin, headerRuleY, 194, headerRuleY);
 
-      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...red); pdf.setFontSize(9); pdf.text('BILL TO', margin, 50);
-      pdf.setTextColor(...ink); pdf.setFontSize(12); pdf.text(invoice.customer || '-', margin, 58);
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); const customer = pdf.splitTextToSize(invoice.customerAddress || '-', 75); pdf.text(customer, margin, 63);
-      if (invoice.customerPhone) pdf.text(invoice.customerPhone, margin, 63 + customer.length * 4);
-      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...red); pdf.setFontSize(22); pdf.text('INVOICE', 194, 57, { align: 'right' });
-      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text('Invoice #:', 156, 64); pdf.setFont('helvetica', 'bold'); pdf.text(invoice.number, 194, 64, { align: 'right' });
-      pdf.setFont('helvetica', 'normal'); pdf.text('Tanggal:', 156, 69); pdf.setFont('helvetica', 'bold'); pdf.text(invoiceDate, 194, 69, { align: 'right' });
+      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...red); pdf.setFontSize(9); pdf.text('BILL TO', margin, headerRuleY + 11);
+      pdf.setTextColor(...ink); pdf.setFontSize(12); pdf.text(invoice.customer || '-', margin, headerRuleY + 19);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); const customer = pdf.splitTextToSize(invoice.customerAddress || '-', 75); pdf.text(customer, margin, headerRuleY + 24);
+      if (invoice.customerPhone) pdf.text(invoice.customerPhone, margin, headerRuleY + 24 + customer.length * 4);
+      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...red); pdf.setFontSize(22); pdf.text('INVOICE', 194, headerRuleY + 18, { align: 'right' });
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...ink); pdf.setFontSize(7); pdf.text('Invoice #:', 142, headerRuleY + 25); pdf.setFont('helvetica', 'bold'); pdf.text(invoice.number, 194, headerRuleY + 25, { align: 'right' });
+      pdf.setFont('helvetica', 'normal'); pdf.text('Tanggal:', 142, headerRuleY + 30); pdf.setFont('helvetica', 'bold'); pdf.text(invoiceDate, 194, headerRuleY + 30, { align: 'right' });
 
-      const tableY = 78, itemX = margin, priceX = 109, qtyX = 144, totalX = 161, tableRight = 194;
+      const tableY = headerRuleY + 39, itemX = margin, priceX = 109, qtyX = 144, totalX = 161, tableRight = 194;
       pdf.setFillColor(...ink); pdf.rect(itemX, tableY, tableRight-itemX, 9, 'F'); pdf.setTextColor(255,255,255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
       pdf.text('ITEMS / DESKRIPSI', itemX + 3, tableY + 5.6); pdf.text('HARGA', priceX + 30, tableY + 5.6, { align: 'right' }); pdf.text('QTY', qtyX + 13, tableY + 5.6, { align: 'right' }); pdf.text('TOTAL', tableRight - 3, tableY + 5.6, { align: 'right' });
       let y = tableY + 9;
