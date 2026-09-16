@@ -50,3 +50,6 @@ app.*.map.json
 key.properties
 local.properties
 .env
+node_modules/
+dist/
+server/data/
