@@ -11,3 +11,5 @@
 
 /* The preview can scroll, so its close control remains visible at all times. */
 .preview-close{position:fixed;z-index:20;top:30px;right:max(28px,calc((100vw - 980px)/2 + 12px));display:flex;align-items:center;gap:7px;padding:10px 13px;border-radius:10px;background:#292624;color:#fff;font-size:12px;font-weight:800;box-shadow:0 5px 16px #0004}.preview-close:hover{background:var(--red)}@media(max-width:760px){.preview-close{top:12px;right:12px;padding:9px;font-size:0}.preview-close svg{margin:0}}
+
+.recovery-page{min-height:100vh;display:grid;place-items:center;padding:24px;background:#f8f7f6}.recovery-page section{width:min(440px,100%);padding:34px;background:#fff;border:1px solid var(--line);border-radius:22px;text-align:center;box-shadow:0 22px 55px #331f1815}.recovery-page img{width:190px}.recovery-page h1{font-size:23px;margin:22px 0 10px}.recovery-page p{color:var(--muted);line-height:1.55;font-size:14px;margin:0 0 22px}.recovery-page .primary{margin:auto}

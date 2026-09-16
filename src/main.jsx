@@ -18,6 +18,14 @@ const dueOf = invoice => Math.max(0, totalOf(invoice) - paidOf(invoice));
 const statusOf = invoice => dueOf(invoice) < 1 && totalOf(invoice) > 0 ? 'LUNAS' : paidOf(invoice) > 0 || invoice.paymentStatus === 'dp' ? 'DP / SEBAGIAN' : 'BELUM LUNAS';
 const imageToDataUrl = async src => { const response = await fetch(src); const blob = await response.blob(); return new Promise(resolve => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); }); };
 
+class AppErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error) { console.error('Happy Group app error:', error); }
+  reset = () => { localStorage.removeItem('happy-session'); window.location.href = '/'; };
+  render() { return this.state.failed ? <main className="recovery-page"><section><img src="/assets/images/happy_group_logo.png"/><h1>Halaman perlu dimuat ulang</h1><p>Data sesi lama atau cache browser membuat halaman tidak dapat ditampilkan. Reset akan menghapus sesi login di browser ini, bukan data invoice di server.</p><button className="primary" onClick={this.reset}>Reset & buka aplikasi</button></section></main> : this.props.children; }
+}
+
 function App() {
   const [data, setData] = useState({ addresses: [], invoices: [] });
   const [session, setSession] = useState(() => { try { return JSON.parse(localStorage.getItem('happy-session')); } catch { return null; } });
@@ -111,4 +119,4 @@ function PdfPreview({ invoice, onClose }) {
 }
 function FormGroup({ title, children }) { return <section className="form-group"><h3>{title}</h3>{children}</section> }
 function AddressSettings({ addresses, onClose, onSave }) { const [list, setList] = useState(structuredClone(addresses)); const add = () => setList([...list, { id: uid(), name: '', fullAddress: '' }]); const edit = (i, key, value) => setList(list.map((x, n) => n === i ? { ...x, [key]: value } : x)); return <Modal><div className="modal-header"><div><p className="eyebrow">PERUSAHAAN</p><h2>Data alamat kantor</h2></div><button className="close" onClick={onClose}><X/></button></div>{list.map((address, index) => <div className="address-edit" key={address.id}><input placeholder="Nama kantor" value={address.name} onChange={e => edit(index, 'name', e.target.value)}/><textarea placeholder="Alamat lengkap" value={address.fullAddress} onChange={e => edit(index, 'fullAddress', e.target.value)}/><button className="icon-danger" onClick={() => setList(list.filter((_, i) => i !== index))}><Trash2 size={17}/></button></div>)}<button className="add-line" onClick={add}><Plus size={16}/> Tambah alamat</button><div className="modal-footer"><span>{list.length} alamat tersimpan</span><button className="primary" onClick={() => onSave(list.filter(x => x.name.trim() && x.fullAddress.trim()).map(x => ({ ...x, name: x.name.trim(), fullAddress: x.fullAddress.trim() }))) }><CheckCircle2 size={18}/> Simpan alamat</button></div></Modal> }
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById('root')).render(<AppErrorBoundary><App/></AppErrorBoundary>);
