@@ -24,7 +24,8 @@ function requireAuth(req, res, next) {
   try { req.user = jwt.verify(token, jwtSecret); next(); } catch { return res.status(401).json({ message: 'Sesi tidak valid atau sudah berakhir.' }); }
 }
 const allow = (...roles) => (req, res, next) => roles.includes(req.user.role) ? next() : res.status(403).json({ message: 'Akses khusus administrator.' });
-const toInvoice = invoice => ({ ...invoice, issueDate: String(invoice.issue_date).slice(0, 10), companyAddress: invoice.company_address, customerAddress: invoice.customer_address || '', customerPhone: invoice.customer_phone || '', paymentStatus: invoice.payment_status, items: [], payments: [] });
+const sqlDate = value => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+const toInvoice = invoice => ({ ...invoice, issueDate: sqlDate(invoice.issue_date), companyAddress: invoice.company_address, customerAddress: invoice.customer_address || '', customerPhone: invoice.customer_phone || '', paymentStatus: invoice.payment_status, items: [], payments: [] });
 
 async function fetchInvoices() {
   const invoices = (await query(`SELECT i.*, u.name AS created_by_name FROM invoices i JOIN users u ON u.id=i.created_by ORDER BY i.issue_date DESC, i.created_at DESC`)).map(toInvoice);
