@@ -4,7 +4,9 @@ import { jsPDF } from 'jspdf';
 import { Plus, ReceiptText, Building2, MapPin, Pencil, Trash2, X, Download, CheckCircle2, WalletCards, ChevronRight, FileText, Eye, Share2, ArrowRight, ClipboardList } from 'lucide-react';
 import './styles.css';
 
-const API = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:4000/api`;
+// Production is served by Express/Caddy on the same origin. Vite development keeps
+// its API on port 4000 unless an explicit VITE_API_URL is supplied.
+const API = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? `${window.location.protocol}//${window.location.hostname}:4000/api` : `${window.location.origin}/api`);
 const IDR = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 const dateId = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' });
 const today = () => new Date().toISOString().slice(0, 10);
