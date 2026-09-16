@@ -16,7 +16,7 @@ if (!jwtSecret || jwtSecret.length < 32) throw new Error('JWT_SECRET must be con
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || true }));
 app.use(express.json({ limit: '2mb' }));
 
-const publicUser = user => ({ id: user.id, name: user.name, email: user.email, role: user.role });
+const publicUser = user => ({ id: user.id, name: user.name, username: user.username, role: user.role });
 const sign = user => jwt.sign({ sub: user.id, role: user.role, name: user.name }, jwtSecret, { expiresIn: '8h' });
 function requireAuth(req, res, next) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
@@ -52,9 +52,9 @@ async function writeInvoice(conn, incoming, userId) {
 
 app.get('/api/health', async (_, res) => { try { await query('SELECT 1'); res.json({ ok: true, database: 'mysql' }); } catch { res.status(503).json({ ok: false, database: 'unavailable' }); } });
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body || {}; if (!email || !password) return res.status(400).json({ message: 'Email dan password wajib diisi.' });
-  const users = await query('SELECT * FROM users WHERE email = ? AND is_active = TRUE', [String(email).toLowerCase().trim()]);
-  if (!users.length || !(await bcrypt.compare(password, users[0].password_hash))) return res.status(401).json({ message: 'Email atau password salah.' });
+  const { username, password } = req.body || {}; if (!username || !password) return res.status(400).json({ message: 'Username dan password wajib diisi.' });
+  const users = await query('SELECT * FROM users WHERE username = ? AND is_active = TRUE', [String(username).trim()]);
+  if (!users.length || !(await bcrypt.compare(password, users[0].password_hash))) return res.status(401).json({ message: 'Username atau password salah.' });
   res.json({ token: sign(users[0]), user: publicUser(users[0]) });
 });
 app.get('/api/auth/me', requireAuth, async (req, res) => { const users = await query('SELECT * FROM users WHERE id = ?', [req.user.sub]); if (!users.length) return res.status(401).json({ message: 'Pengguna tidak ditemukan.' }); res.json(publicUser(users[0])); });
@@ -65,8 +65,8 @@ app.put('/api/data', requireAuth, allow('admin'), async (req, res) => {
 app.get('/api/invoices', requireAuth, async (_, res) => res.json(await fetchInvoices()));
 app.post('/api/invoices', requireAuth, async (req, res) => { const conn = await pool.getConnection(); try { await conn.beginTransaction(); const invoice = await writeInvoice(conn, req.body, req.user.sub); await conn.commit(); res.status(201).json(invoice); } catch (error) { await conn.rollback(); throw error; } finally { conn.release(); } });
 app.delete('/api/invoices/:id', requireAuth, allow('admin'), async (req, res) => { await query('DELETE FROM invoices WHERE id = ?', [req.params.id]); res.status(204).end(); });
-app.get('/api/users', requireAuth, allow('admin'), async (_, res) => res.json((await query('SELECT id, name, email, role, is_active, created_at AS createdAt FROM users ORDER BY created_at')).map(publicUser)));
-app.post('/api/users', requireAuth, allow('admin'), async (req, res) => { const { name, email, password, role = 'user' } = req.body || {}; if (!name || !email || !password || !['admin','user'].includes(role)) return res.status(400).json({ message: 'Nama, email, password dan peran yang valid wajib diisi.' }); const user = { id: crypto.randomUUID(), name: String(name).trim(), email: String(email).toLowerCase().trim(), role }; try { await query('INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)', [user.id, user.name, user.email, await bcrypt.hash(password, 12), user.role]); res.status(201).json(publicUser(user)); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Email sudah digunakan.' }); throw error; } });
+app.get('/api/users', requireAuth, allow('admin'), async (_, res) => res.json((await query('SELECT id, name, username, role, is_active, created_at AS createdAt FROM users ORDER BY created_at')).map(publicUser)));
+app.post('/api/users', requireAuth, allow('admin'), async (req, res) => { const { name, username, password, role = 'user' } = req.body || {}; if (!name || !username || !password || !['admin','user'].includes(role)) return res.status(400).json({ message: 'Nama, username, password dan peran yang valid wajib diisi.' }); const user = { id: crypto.randomUUID(), name: String(name).trim(), username: String(username).trim(), role }; try { await query('INSERT INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)', [user.id, user.name, user.username, await bcrypt.hash(password, 12), user.role]); res.status(201).json(publicUser(user)); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Username sudah digunakan.' }); throw error; } });
 app.use((error, _, res, __) => { console.error(error); res.status(500).json({ message: 'Terjadi kesalahan pada server.' }); });
 if (process.env.NODE_ENV === 'production') { app.use(express.static(path.join(root, 'dist'))); app.use((_, res) => res.sendFile(path.join(root, 'dist', 'index.html'))); }
 const port = process.env.PORT || 4000;

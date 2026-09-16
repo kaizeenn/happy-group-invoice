@@ -45,7 +45,7 @@ docker compose exec app npm run db:migrate
 docker compose logs -f app
 ```
 
-Migration membuat alamat kantor awal dan satu akun administrator sesuai `ADMIN_EMAIL` dan `ADMIN_PASSWORD` dalam `.env`. Setelah login pertama, jangan bagikan password itu dan ganti jika perlu.
+Migration membuat alamat kantor awal serta akun `ADMIN_USERNAME` dan `USER_USERNAME` sesuai `.env`. Setelah login pertama, jangan bagikan password tersebut dan ganti jika perlu.
 
 Cek layanan:
 

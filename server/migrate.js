@@ -13,20 +13,20 @@ const addresses = [
 ];
 for (const [id, name, fullAddress] of addresses) await query('INSERT IGNORE INTO office_addresses (id, name, full_address) VALUES (?, ?, ?)', [id, name, fullAddress]);
 
-const adminEmail = process.env.ADMIN_EMAIL || 'admin@happygroup.local';
+const adminUsername = process.env.ADMIN_USERNAME || 'admin';
 const adminPassword = process.env.ADMIN_PASSWORD || 'GantiPasswordAdmin123!';
-const existing = await query('SELECT id FROM users WHERE email = ?', [adminEmail]);
+const existing = await query('SELECT id FROM users WHERE username = ?', [adminUsername]);
 if (!existing.length) {
-  await query('INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)', [crypto.randomUUID(), 'Administrator', adminEmail, await bcrypt.hash(adminPassword, 12), 'admin']);
-  console.log(`Admin created: ${adminEmail}. Change the supplied ADMIN_PASSWORD immediately.`);
-} else console.log(`Admin exists: ${adminEmail}`);
+  await query('INSERT INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)', [crypto.randomUUID(), 'Administrator', adminUsername, await bcrypt.hash(adminPassword, 12), 'admin']);
+  console.log(`Admin created: ${adminUsername}. Change the supplied ADMIN_PASSWORD immediately.`);
+} else console.log(`Admin exists: ${adminUsername}`);
 
-const userEmail = process.env.USER_EMAIL || 'user@happygroup.local';
+const userUsername = process.env.USER_USERNAME || 'user';
 const userPassword = process.env.USER_PASSWORD || 'GantiPasswordUser123!';
-const regularUser = await query('SELECT id FROM users WHERE email = ?', [userEmail]);
+const regularUser = await query('SELECT id FROM users WHERE username = ?', [userUsername]);
 if (!regularUser.length) {
-  await query('INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)', [crypto.randomUUID(), 'Staff Invoice', userEmail, await bcrypt.hash(userPassword, 12), 'user']);
-  console.log(`Regular user created: ${userEmail}. Change the supplied USER_PASSWORD immediately.`);
-} else console.log(`Regular user exists: ${userEmail}`);
+  await query('INSERT INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)', [crypto.randomUUID(), 'Staff Invoice', userUsername, await bcrypt.hash(userPassword, 12), 'user']);
+  console.log(`Regular user created: ${userUsername}. Change the supplied USER_PASSWORD immediately.`);
+} else console.log(`Regular user exists: ${userUsername}`);
 await pool.end();
 console.log('Database migration complete.');

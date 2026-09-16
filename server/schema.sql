@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS users (
   id CHAR(36) PRIMARY KEY,
   name VARCHAR(120) NOT NULL,
-  email VARCHAR(190) NOT NULL UNIQUE,
+  username VARCHAR(80) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('admin','user') NOT NULL DEFAULT 'user',
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
