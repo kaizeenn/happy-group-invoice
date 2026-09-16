@@ -10,9 +10,11 @@ const API = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? `${window.loc
 const IDR = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 const dateId = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' });
 const today = () => new Date().toISOString().slice(0, 10);
-const uid = () => crypto.randomUUID();
+// Some mobile / embedded browsers do not expose crypto.randomUUID(). A fallback
+// keeps the invoice form usable while still generating collision-resistant IDs.
+const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 const serviceTypes = ['Big Bus', 'Medium Long', 'Medium Bus', 'Elf Long', 'Hiace', 'Inova', 'Avanza', 'Truck Fuso', 'Truck Tronton', 'Truck CDD', 'Truck CDE', 'Truck CDE BOX'];
-const invoiceNumber = () => { const now = new Date(); const stamp = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join(''); const time = [now.getHours(), now.getMinutes(), now.getSeconds()].map(value => String(value).padStart(2, '0')).join(''); const unique = crypto.randomUUID().slice(0, 4).toUpperCase(); return `INV-${stamp}-${time}-${unique}`; };
+const invoiceNumber = () => { const now = new Date(); const stamp = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join(''); const time = [now.getHours(), now.getMinutes(), now.getSeconds()].map(value => String(value).padStart(2, '0')).join(''); const unique = uid().replaceAll(/[^a-z0-9]/gi, '').slice(-4).toUpperCase().padStart(4, '0'); return `INV-${stamp}-${time}-${unique}`; };
 const emptyInvoice = addresses => ({ id: uid(), number: invoiceNumber(), issueDate: today(), companyAddress: addresses[0]?.fullAddress || '', customer: '', customerAddress: '', customerPhone: '', paymentStatus: 'auto', items: [], payments: [], terms: 'DP 50%\nPelunasan H-3 sebelum tanggal keberangkatan\nInclude Unit, BBM, dan Driver.\nExclude Pajak, Parkir, Tol, Makan dan Tip Crew.', notes: '' });
 const totalOf = invoice => invoice.items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
 const recordedPaid = invoice => invoice.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
