@@ -23,7 +23,18 @@ function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ message: 'Silakan masuk terlebih dahulu.' });
   try { req.user = jwt.verify(token, jwtSecret); next(); } catch { return res.status(401).json({ message: 'Sesi tidak valid atau sudah berakhir.' }); }
 }
-const allow = (...roles) => (req, res, next) => roles.includes(req.user.role) ? next() : res.status(403).json({ message: 'Akses khusus administrator.' });
+// Super admin inherits every administrator permission, while standard admins
+// remain limited to the actions explicitly granted to the admin role.
+const allow = (...roles) => (req, res, next) => (roles.includes(req.user.role) || (req.user.role === 'super_admin' && roles.includes('admin'))) ? next() : res.status(403).json({ message: 'Akses khusus administrator.' });
+async function resolveManageableUser(req, res, next) {
+  const users = await query('SELECT id, role FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+  if (!users.length) return res.status(404).json({ message: 'Akun tidak ditemukan.' });
+  const target = users[0];
+  if (req.user.role === 'admin' && target.role !== 'user') return res.status(403).json({ message: 'Admin hanya dapat mengelola akun User biasa.' });
+  if (req.user.role === 'super_admin' && (target.role === 'super_admin' || target.id === req.user.sub)) return res.status(400).json({ message: 'Akun Super Admin tidak dapat diubah atau dihapus melalui menu ini.' });
+  req.targetUser = target;
+  next();
+}
 const sqlDate = value => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
 const toInvoice = invoice => ({ ...invoice, issueDate: sqlDate(invoice.issue_date), companyAddress: invoice.company_address, customerAddress: invoice.customer_address || '', customerPhone: invoice.customer_phone || '', paymentStatus: invoice.payment_status, items: [], payments: [] });
 
@@ -73,17 +84,13 @@ app.post('/api/invoices', requireAuth, async (req, res) => { const conn = await 
 // are removed automatically through the database's cascading foreign keys.
 app.delete('/api/invoices/:id', requireAuth, async (req, res) => { const result = await query('DELETE FROM invoices WHERE id = ?', [req.params.id]); if (!result.affectedRows) return res.status(404).json({ message: 'Invoice tidak ditemukan atau sudah dihapus.' }); res.status(204).end(); });
 app.get('/api/users', requireAuth, allow('admin'), async (_, res) => res.json((await query('SELECT id, name, username, role, is_active AS isActive, created_at AS createdAt FROM users ORDER BY created_at')).map(user => ({ id: user.id, name: user.name, username: user.username, role: user.role, isActive: Boolean(user.isActive), createdAt: user.createdAt }))));
-app.post('/api/users', requireAuth, allow('admin'), async (req, res) => { const { name, username, password, role = 'user' } = req.body || {}; if (!name || !username || !password || password.length < 8 || !['admin','user'].includes(role)) return res.status(400).json({ message: 'Nama, username, password minimal 8 karakter, dan peran yang valid wajib diisi.' }); const user = { id: crypto.randomUUID(), name: String(name).trim(), username: String(username).trim(), role }; try { await query('INSERT INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)', [user.id, user.name, user.username, await bcrypt.hash(password, 12), user.role]); res.status(201).json(publicUser(user)); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Username sudah digunakan.' }); throw error; } });
-app.put('/api/users/:id/password', requireAuth, allow('admin'), async (req, res) => { const password = String(req.body?.password || ''); if (password.length < 8) return res.status(400).json({ message: 'Password minimal harus 8 karakter.' }); const result = await query('UPDATE users SET password_hash = ? WHERE id = ?', [await bcrypt.hash(password, 12), req.params.id]); if (!result.affectedRows) return res.status(404).json({ message: 'Akun tidak ditemukan.' }); res.json({ ok: true }); });
-app.delete('/api/users/:id', requireAuth, allow('admin'), async (req, res) => {
-  if (req.params.id === req.user.sub) return res.status(400).json({ message: 'Akun admin yang sedang digunakan tidak dapat dihapus.' });
-  const users = await query('SELECT id, role FROM users WHERE id = ? LIMIT 1', [req.params.id]);
-  if (!users.length) return res.status(404).json({ message: 'Akun tidak ditemukan.' });
-  if (users[0].role !== 'user') return res.status(400).json({ message: 'Hanya akun User biasa yang dapat dihapus.' });
-  const invoiceCount = await query('SELECT COUNT(*) AS total FROM invoices WHERE created_by = ?', [req.params.id]);
-  const paymentCount = await query('SELECT COUNT(*) AS total FROM payments WHERE created_by = ?', [req.params.id]);
+app.post('/api/users', requireAuth, allow('admin'), async (req, res) => { const { name, username, password, role = 'user' } = req.body || {}; if (!name || !username || !password || password.length < 8 || !['admin','user'].includes(role)) return res.status(400).json({ message: 'Nama, username, password minimal 8 karakter, dan peran yang valid wajib diisi.' }); if (req.user.role === 'admin' && role !== 'user') return res.status(403).json({ message: 'Hanya Super Admin yang dapat membuat akun Admin.' }); const user = { id: crypto.randomUUID(), name: String(name).trim(), username: String(username).trim(), role }; try { await query('INSERT INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)', [user.id, user.name, user.username, await bcrypt.hash(password, 12), user.role]); res.status(201).json(publicUser(user)); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Username sudah digunakan.' }); throw error; } });
+app.put('/api/users/:id/password', requireAuth, allow('admin'), resolveManageableUser, async (req, res) => { const password = String(req.body?.password || ''); if (password.length < 8) return res.status(400).json({ message: 'Password minimal harus 8 karakter.' }); await query('UPDATE users SET password_hash = ? WHERE id = ?', [await bcrypt.hash(password, 12), req.targetUser.id]); res.json({ ok: true }); });
+app.delete('/api/users/:id', requireAuth, allow('admin'), resolveManageableUser, async (req, res) => {
+  const invoiceCount = await query('SELECT COUNT(*) AS total FROM invoices WHERE created_by = ?', [req.targetUser.id]);
+  const paymentCount = await query('SELECT COUNT(*) AS total FROM payments WHERE created_by = ?', [req.targetUser.id]);
   if (Number(invoiceCount[0].total) || Number(paymentCount[0].total)) return res.status(409).json({ message: `Akun ini tidak dapat dihapus karena memiliki ${invoiceCount[0].total} invoice dan ${paymentCount[0].total} pembayaran tercatat. Hapus invoice terkait terlebih dahulu agar riwayat tetap konsisten.` });
-  await query('DELETE FROM users WHERE id = ?', [req.params.id]);
+  await query('DELETE FROM users WHERE id = ?', [req.targetUser.id]);
   res.status(204).end();
 });
 app.use((error, _, res, __) => { console.error(error); res.status(500).json({ message: 'Terjadi kesalahan pada server.' }); });

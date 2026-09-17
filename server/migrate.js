@@ -6,12 +6,31 @@ import { pool, query } from './db.js';
 const sql = await fs.readFile(new URL('./schema.sql', import.meta.url), 'utf8');
 for (const statement of sql.split(/;\s*(?:\r?\n|$)/).map(s => s.trim()).filter(Boolean)) await query(statement);
 
+// Existing production databases need an explicit ALTER; CREATE TABLE IF NOT EXISTS
+// does not modify an already-created ENUM definition.
+const roleDefinition = await query("SELECT COLUMN_TYPE AS columnType FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'role'");
+if (roleDefinition[0] && !roleDefinition[0].columnType.includes('super_admin')) await query("ALTER TABLE users MODIFY role ENUM('super_admin','admin','user') NOT NULL DEFAULT 'user'");
+
 const addresses = [
   ['yogyakarta', 'Kantor Yogyakarta', 'Jl. Imogiri Barat Km 7, Bangunharjo, Kec. Sewon, Kab. Bantul, Yogyakarta 55188'],
   ['jakarta', 'Kantor Jakarta', 'Kawasan CBD Rasuna Epicentrum, Epiwalk Office Suite Level 5 Unit A501, Jl. H. R. Rasuna Said, Karet, Kuningan, Jakarta Selatan 12940'],
   ['bandung', 'Kantor Bandung', 'Jl. A.H. Nasution No. 952, Antapani Wetan, Kec. Antapani, Kota Bandung, Jawa Barat 40291']
 ];
 for (const [id, name, fullAddress] of addresses) await query('INSERT IGNORE INTO office_addresses (id, name, full_address) VALUES (?, ?, ?)', [id, name, fullAddress]);
+
+const superAdminUsername = process.env.SUPER_ADMIN_USERNAME || process.env.ADMIN_USERNAME || 'admin';
+const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'GantiPasswordSuperAdmin123!';
+const existingSuperAdmin = await query("SELECT id FROM users WHERE role = 'super_admin' LIMIT 1");
+if (!existingSuperAdmin.length) {
+  const existingPrimary = await query('SELECT id FROM users WHERE username = ?', [superAdminUsername]);
+  if (existingPrimary.length) {
+    await query("UPDATE users SET role = 'super_admin' WHERE id = ?", [existingPrimary[0].id]);
+    console.log(`Super admin promoted: ${superAdminUsername}.`);
+  } else {
+    await query('INSERT INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)', [crypto.randomUUID(), 'Super Administrator', superAdminUsername, await bcrypt.hash(superAdminPassword, 12), 'super_admin']);
+    console.log(`Super admin created: ${superAdminUsername}. Change the supplied SUPER_ADMIN_PASSWORD immediately.`);
+  }
+}
 
 const adminUsername = process.env.ADMIN_USERNAME || 'admin';
 const adminPassword = process.env.ADMIN_PASSWORD || 'GantiPasswordAdmin123!';
