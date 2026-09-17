@@ -152,7 +152,9 @@ function PdfPreview({ invoice, onClose, onEdit, onAddPayment }) {
       const total = totalOf(invoice), paidTotal = paidOf(invoice), due = dueOf(invoice);
       const terms = pdf.splitTextToSize(invoice.terms || '-', 86);
       const stampHeight = statusOf(invoice) === 'LUNAS' ? 65 : 0;
-      const lowerHeight = Math.max(terms.length * 3.6 + 95, 98 + stampHeight);
+      // The closing block must include the signature's complete image, name and role,
+      // not only the totals box. Otherwise it can be clipped at the page bottom.
+      const lowerHeight = Math.max(terms.length * 3.6 + 118, 174);
       // Move the closing section as a unit if the remaining space cannot fit it.
       if (y + lowerHeight > 284) {
         pdf.addPage();
@@ -175,8 +177,10 @@ function PdfPreview({ invoice, onClose, onEdit, onAddPayment }) {
       const bankY = Math.max(termsEndY + 14, summaryY + 43);
       pdf.setTextColor(...red); pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('BANK ACCOUNT', margin, bankY);
       pdf.setTextColor(...ink); pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.text(['PT HAPPY TRANS HARYADI','BCA 846-598-6111','MANDIRI 137.004747.1111','ARI HARYADI - BCA 8465-688-111'], margin, bankY+8);
-      // Keep the signature clear of both the total box/PAID stamp and bank lines.
-      const signatureY = Math.max(summaryY + 38 + stampHeight, bankY + 35);
+      // The bank account stays on the left while the signature stays on the right.
+      // Start the signature after the terms (with 20 mm breathing room) so it never
+      // overlaps the terms, while avoiding an unnecessarily low signature position.
+      const signatureY = Math.max(termsEndY + 20, summaryY + 38 + stampHeight);
       pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
       pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'});
       pdf.setFont('helvetica','normal'); pdf.text(invoiceDate,181,signatureY+9,{align:'center'});
