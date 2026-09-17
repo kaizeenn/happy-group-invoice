@@ -75,7 +75,17 @@ app.delete('/api/invoices/:id', requireAuth, async (req, res) => { const result 
 app.get('/api/users', requireAuth, allow('admin'), async (_, res) => res.json((await query('SELECT id, name, username, role, is_active AS isActive, created_at AS createdAt FROM users ORDER BY created_at')).map(user => ({ id: user.id, name: user.name, username: user.username, role: user.role, isActive: Boolean(user.isActive), createdAt: user.createdAt }))));
 app.post('/api/users', requireAuth, allow('admin'), async (req, res) => { const { name, username, password, role = 'user' } = req.body || {}; if (!name || !username || !password || password.length < 8 || !['admin','user'].includes(role)) return res.status(400).json({ message: 'Nama, username, password minimal 8 karakter, dan peran yang valid wajib diisi.' }); const user = { id: crypto.randomUUID(), name: String(name).trim(), username: String(username).trim(), role }; try { await query('INSERT INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)', [user.id, user.name, user.username, await bcrypt.hash(password, 12), user.role]); res.status(201).json(publicUser(user)); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Username sudah digunakan.' }); throw error; } });
 app.put('/api/users/:id/password', requireAuth, allow('admin'), async (req, res) => { const password = String(req.body?.password || ''); if (password.length < 8) return res.status(400).json({ message: 'Password minimal harus 8 karakter.' }); const result = await query('UPDATE users SET password_hash = ? WHERE id = ?', [await bcrypt.hash(password, 12), req.params.id]); if (!result.affectedRows) return res.status(404).json({ message: 'Akun tidak ditemukan.' }); res.json({ ok: true }); });
-app.delete('/api/users/:id', requireAuth, allow('admin'), async (req, res) => { if (req.params.id === req.user.sub) return res.status(400).json({ message: 'Akun admin yang sedang digunakan tidak dapat dihapus.' }); const result = await query('DELETE FROM users WHERE id = ? AND role = ?', [req.params.id, 'user']); if (!result.affectedRows) return res.status(400).json({ message: 'Hanya akun User biasa yang dapat dihapus.' }); res.status(204).end(); });
+app.delete('/api/users/:id', requireAuth, allow('admin'), async (req, res) => {
+  if (req.params.id === req.user.sub) return res.status(400).json({ message: 'Akun admin yang sedang digunakan tidak dapat dihapus.' });
+  const users = await query('SELECT id, role FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+  if (!users.length) return res.status(404).json({ message: 'Akun tidak ditemukan.' });
+  if (users[0].role !== 'user') return res.status(400).json({ message: 'Hanya akun User biasa yang dapat dihapus.' });
+  const invoiceCount = await query('SELECT COUNT(*) AS total FROM invoices WHERE created_by = ?', [req.params.id]);
+  const paymentCount = await query('SELECT COUNT(*) AS total FROM payments WHERE created_by = ?', [req.params.id]);
+  if (Number(invoiceCount[0].total) || Number(paymentCount[0].total)) return res.status(409).json({ message: `Akun ini tidak dapat dihapus karena memiliki ${invoiceCount[0].total} invoice dan ${paymentCount[0].total} pembayaran tercatat. Hapus invoice terkait terlebih dahulu agar riwayat tetap konsisten.` });
+  await query('DELETE FROM users WHERE id = ?', [req.params.id]);
+  res.status(204).end();
+});
 app.use((error, _, res, __) => { console.error(error); res.status(500).json({ message: 'Terjadi kesalahan pada server.' }); });
 if (process.env.NODE_ENV === 'production') { app.use(express.static(path.join(root, 'dist'))); app.use((_, res) => res.sendFile(path.join(root, 'dist', 'index.html'))); }
 const port = process.env.PORT || 4000;
