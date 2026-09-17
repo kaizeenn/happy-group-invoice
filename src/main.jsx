@@ -114,25 +114,75 @@ function PdfPreview({ invoice, onClose, onEdit, onAddPayment }) {
       pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...ink); pdf.setFontSize(7); pdf.text('Invoice #:', 142, headerRuleY + 25); pdf.setFont('helvetica', 'bold'); pdf.text(invoice.number, 194, headerRuleY + 25, { align: 'right' });
       pdf.setFont('helvetica', 'normal'); pdf.text('Tanggal:', 142, headerRuleY + 30); pdf.setFont('helvetica', 'bold'); pdf.text(invoiceDate, 194, headerRuleY + 30, { align: 'right' });
 
-      const tableY = headerRuleY + 39, itemX = margin, priceX = 109, qtyX = 144, totalX = 161, tableRight = 194;
-      pdf.setFillColor(...ink); pdf.rect(itemX, tableY, tableRight-itemX, 9, 'F'); pdf.setTextColor(255,255,255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
-      pdf.text('ITEMS / DESKRIPSI', itemX + 3, tableY + 5.6); pdf.text('HARGA', priceX + 30, tableY + 5.6, { align: 'right' }); pdf.text('QTY', qtyX + 13, tableY + 5.6, { align: 'right' }); pdf.text('TOTAL', tableRight - 3, tableY + 5.6, { align: 'right' });
-      let y = tableY + 9;
+      const itemX = margin, priceX = 109, qtyX = 144, totalX = 161, tableRight = 194;
+      const drawTableHeader = y => {
+        pdf.setFillColor(...ink); pdf.rect(itemX, y, tableRight-itemX, 9, 'F');
+        pdf.setTextColor(255,255,255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
+        pdf.text('ITEMS / DESKRIPSI', itemX + 3, y + 5.6); pdf.text('HARGA', priceX + 30, y + 5.6, { align: 'right' }); pdf.text('QTY', qtyX + 13, y + 5.6, { align: 'right' }); pdf.text('TOTAL', tableRight - 3, y + 5.6, { align: 'right' });
+        return y + 9;
+      };
+      const addContinuationPage = () => {
+        pdf.addPage();
+        pdf.addImage(logo, 'PNG', margin, 13, 44, 16);
+        pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...ink); pdf.setFontSize(14); pdf.text('INVOICE', 194, 18, { align: 'right' });
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.text(invoice.number, 194, 23, { align: 'right' });
+        pdf.setDrawColor(...red); pdf.setLineWidth(1); pdf.line(margin, 31, 194, 31);
+        return drawTableHeader(39);
+      };
+      let y = drawTableHeader(headerRuleY + 39);
       pdf.setDrawColor(185, 185, 185); pdf.setLineWidth(.2);
-      invoice.items.forEach(item => {
-        const title = pdf.splitTextToSize(item.description || '-', 85); const route = item.detail ? pdf.splitTextToSize(item.detail, 85) : []; const note = item.note ? pdf.splitTextToSize(`Catatan: ${item.note}`, 85) : [];
-        const rowHeight = Math.max(14, 5 + (title.length + route.length + note.length) * 4); pdf.rect(itemX, y, tableRight-itemX, rowHeight);
+      for (const item of invoice.items) {
+        const title = pdf.splitTextToSize(item.description || '-', 85);
+        const route = item.detail ? pdf.splitTextToSize(item.detail, 85) : [];
+        const note = item.note ? pdf.splitTextToSize(`Catatan: ${item.note}`, 85) : [];
+        const rowHeight = Math.max(14, 5 + (title.length + route.length + note.length) * 4);
+        // Reserve the bottom of each page for the totals, terms, bank account and signature.
+        // The whole row moves to the next page, so table borders/text never collide.
+        if (y + rowHeight > 197) y = addContinuationPage();
+        pdf.rect(itemX, y, tableRight-itemX, rowHeight);
         pdf.line(priceX, y, priceX, y+rowHeight); pdf.line(qtyX, y, qtyX, y+rowHeight); pdf.line(totalX, y, totalX, y+rowHeight);
         pdf.setTextColor(...ink); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.text(title, itemX+3, y+6);
-        let itemTextY = y + 6 + title.length * 4; pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); if(route.length){ pdf.text(route, itemX+3, itemTextY); itemTextY += route.length * 4; } if(note.length){ pdf.setTextColor(100,100,100); pdf.setFontSize(7); pdf.text(note, itemX+3, itemTextY); }
-        pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text(money(item.price), qtyX-3, y+6, {align:'right'}); pdf.text(String(item.quantity || 1), totalX-3, y+6, {align:'right'}); pdf.text(money(Number(item.price || 0)*Number(item.quantity || 0)), tableRight-3, y+6, {align:'right'}); y += rowHeight;
-      });
-      const total = totalOf(invoice), paidTotal = paidOf(invoice), due = dueOf(invoice); const termsY = y + 10, summaryY = y + 8;
-      pdf.setTextColor(...red); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.text('TERMS', margin, termsY + 3); pdf.setTextColor(...ink); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.text(pdf.splitTextToSize(invoice.terms || '-', 86), margin, termsY + 10);
-      pdf.setDrawColor(165,165,165); pdf.setLineWidth(.35); pdf.rect(119, summaryY, 75, 30); pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text('Total',123,summaryY+8); pdf.text('Paid',123,summaryY+14); pdf.setFont('helvetica','bold'); pdf.text(money(total),190,summaryY+8,{align:'right'}); pdf.text(money(paidTotal),190,summaryY+14,{align:'right'}); pdf.line(123,summaryY+19,190,summaryY+19); pdf.setFontSize(10); pdf.text('Amount Due (IDR)',123,summaryY+27); pdf.setTextColor(...red); pdf.text(money(due),190,summaryY+27,{align:'right'});
+        let itemTextY = y + 6 + title.length * 4;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+        if(route.length){ pdf.text(route, itemX+3, itemTextY); itemTextY += route.length * 4; }
+        if(note.length){ pdf.setTextColor(100,100,100); pdf.setFontSize(7); pdf.text(note, itemX+3, itemTextY); }
+        pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text(money(item.price), qtyX-3, y+6, {align:'right'}); pdf.text(String(item.quantity || 1), totalX-3, y+6, {align:'right'}); pdf.text(money(Number(item.price || 0)*Number(item.quantity || 0)), tableRight-3, y+6, {align:'right'});
+        y += rowHeight;
+      }
+      const total = totalOf(invoice), paidTotal = paidOf(invoice), due = dueOf(invoice);
+      const terms = pdf.splitTextToSize(invoice.terms || '-', 86);
+      const stampHeight = statusOf(invoice) === 'LUNAS' ? 65 : 0;
+      const lowerHeight = Math.max(terms.length * 3.6 + 95, 98 + stampHeight);
+      // Move the closing section as a unit if the remaining space cannot fit it.
+      if (y + lowerHeight > 284) {
+        pdf.addPage();
+        pdf.addImage(logo, 'PNG', margin, 13, 44, 16);
+        pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...ink); pdf.setFontSize(14); pdf.text('INVOICE', 194, 18, { align: 'right' });
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.text(invoice.number, 194, 23, { align: 'right' });
+        pdf.setDrawColor(...red); pdf.setLineWidth(1); pdf.line(margin, 31, 194, 31);
+        y = 42;
+      }
+      const lowerY = y + 8, termsY = lowerY + 2, summaryY = lowerY;
+      pdf.setTextColor(...red); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.text('TERMS', margin, termsY + 3);
+      pdf.setTextColor(...ink); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.text(terms, margin, termsY + 10, { lineHeightFactor: 1.25 });
+      pdf.setDrawColor(165,165,165); pdf.setLineWidth(.35); pdf.rect(119, summaryY, 75, 30);
+      pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text('Total',123,summaryY+8); pdf.text('Paid',123,summaryY+14);
+      pdf.setFont('helvetica','bold'); pdf.text(money(total),190,summaryY+8,{align:'right'}); pdf.text(money(paidTotal),190,summaryY+14,{align:'right'});
+      pdf.line(123,summaryY+19,190,summaryY+19); pdf.setFontSize(10); pdf.text('Amount Due (IDR)',123,summaryY+27);
+      pdf.setTextColor(...red); pdf.text(money(due),190,summaryY+27,{align:'right'});
       if (statusOf(invoice) === 'LUNAS') pdf.addImage(paid, 'PNG', 128, summaryY + 33, 59, 32);
-      const bankY = 201; pdf.setTextColor(...red); pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('BANK ACCOUNT', margin, bankY); pdf.setTextColor(...ink); pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.text(['PT HAPPY TRANS HARYADI','BCA 846-598-6111','MANDIRI 137.004747.1111','ARI HARYADI - BCA 8465-688-111'], margin, bankY+8);
-      const signatureY = 168; pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text('Hormat kami,', 181, signatureY, {align:'center'}); pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'}); pdf.setFont('helvetica','normal'); pdf.text(invoiceDate,181,signatureY+9,{align:'center'}); pdf.addImage(signature, 'PNG', 153, signatureY+11, 56, 29); pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('Kiki Saputri',181,signatureY+48,{align:'center'}); pdf.setFont('helvetica','normal'); pdf.text('Finance',181,signatureY+53,{align:'center'});
+      const termsEndY = termsY + 10 + terms.length * 3.6;
+      const bankY = Math.max(termsEndY + 14, summaryY + 43);
+      pdf.setTextColor(...red); pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('BANK ACCOUNT', margin, bankY);
+      pdf.setTextColor(...ink); pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.text(['PT HAPPY TRANS HARYADI','BCA 846-598-6111','MANDIRI 137.004747.1111','ARI HARYADI - BCA 8465-688-111'], margin, bankY+8);
+      // Keep the signature clear of both the total box/PAID stamp and bank lines.
+      const signatureY = Math.max(summaryY + 38 + stampHeight, bankY + 35);
+      pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
+      pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'});
+      pdf.setFont('helvetica','normal'); pdf.text(invoiceDate,181,signatureY+9,{align:'center'});
+      pdf.addImage(signature, 'PNG', 153, signatureY+11, 56, 29);
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('Kiki Saputri',181,signatureY+48,{align:'center'});
+      pdf.setFont('helvetica','normal'); pdf.text('Finance',181,signatureY+53,{align:'center'});
       pdf.save(`${invoice.number}.pdf`);
     } finally { setBusy(false); }
   };
