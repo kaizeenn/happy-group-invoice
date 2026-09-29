@@ -74,7 +74,7 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token: sign(users[0]), user: publicUser(users[0]) });
 });
 app.get('/api/auth/me', requireAuth, async (req, res) => { const users = await query('SELECT * FROM users WHERE id = ?', [req.user.sub]); if (!users.length) return res.status(401).json({ message: 'Pengguna tidak ditemukan.' }); res.json(publicUser(users[0])); });
-app.get('/api/data', requireAuth, async (_, res) => res.json({ addresses: (await query('SELECT id, name, full_address AS fullAddress FROM office_addresses ORDER BY name')), invoices: await fetchInvoices() }));
+app.get('/api/data', requireAuth, async (_, res) => res.json({ addresses: (await query('SELECT id, name, full_address AS fullAddress FROM office_addresses ORDER BY name')), invoices: await fetchInvoices(), pics: (await query('SELECT id, name, role, phone, created_at AS createdAt FROM pics ORDER BY created_at')) }));
 app.put('/api/data', requireAuth, allow('admin'), async (req, res) => {
   const conn = await pool.getConnection(); try { await conn.beginTransaction(); await conn.execute('DELETE FROM office_addresses'); for (const address of req.body.addresses || []) await conn.execute('INSERT INTO office_addresses (id, name, full_address) VALUES (?, ?, ?)', [address.id || crypto.randomUUID(), address.name, address.fullAddress]); for (const invoice of req.body.invoices || []) await writeInvoice(conn, invoice, req.user.sub); await conn.commit(); res.json({ ok: true }); } catch (error) { await conn.rollback(); throw error; } finally { conn.release(); }
 });
@@ -91,6 +91,19 @@ app.delete('/api/users/:id', requireAuth, allow('admin'), resolveManageableUser,
   const paymentCount = await query('SELECT COUNT(*) AS total FROM payments WHERE created_by = ?', [req.targetUser.id]);
   if (Number(invoiceCount[0].total) || Number(paymentCount[0].total)) return res.status(409).json({ message: `Akun ini tidak dapat dihapus karena memiliki ${invoiceCount[0].total} invoice dan ${paymentCount[0].total} pembayaran tercatat. Hapus invoice terkait terlebih dahulu agar riwayat tetap konsisten.` });
   await query('DELETE FROM users WHERE id = ?', [req.targetUser.id]);
+  res.status(204).end();
+});
+// PIC contacts appear at the bottom of every invoice so customers know whom to call.
+app.post('/api/pics', requireAuth, allow('admin'), async (req, res) => {
+  const { name, role, phone } = req.body || {};
+  if (!name || !role || !phone) return res.status(400).json({ message: 'Nama, jabatan, dan nomor telepon PIC wajib diisi.' });
+  const pic = { id: crypto.randomUUID(), name: String(name).trim(), role: String(role).trim(), phone: String(phone).trim() };
+  await query('INSERT INTO pics (id, name, role, phone) VALUES (?, ?, ?, ?)', [pic.id, pic.name, pic.role, pic.phone]);
+  res.status(201).json(pic);
+});
+app.delete('/api/pics/:id', requireAuth, allow('admin'), async (req, res) => {
+  const result = await query('DELETE FROM pics WHERE id = ?', [req.params.id]);
+  if (!result.affectedRows) return res.status(404).json({ message: 'PIC tidak ditemukan atau sudah dihapus.' });
   res.status(204).end();
 });
 app.use((error, _, res, __) => { console.error(error); res.status(500).json({ message: 'Terjadi kesalahan pada server.' }); });
