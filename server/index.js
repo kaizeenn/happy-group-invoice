@@ -74,7 +74,7 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token: sign(users[0]), user: publicUser(users[0]) });
 });
 app.get('/api/auth/me', requireAuth, async (req, res) => { const users = await query('SELECT * FROM users WHERE id = ?', [req.user.sub]); if (!users.length) return res.status(401).json({ message: 'Pengguna tidak ditemukan.' }); res.json(publicUser(users[0])); });
-app.get('/api/data', requireAuth, async (_, res) => res.json({ addresses: (await query('SELECT id, name, full_address AS fullAddress FROM office_addresses ORDER BY name')), invoices: await fetchInvoices(), pics: (await query('SELECT id, name, role, phone, created_at AS createdAt FROM pics ORDER BY created_at')) }));
+app.get('/api/data', requireAuth, async (_, res) => res.json({ addresses: (await query('SELECT id, name, full_address AS fullAddress FROM office_addresses ORDER BY name')), invoices: await fetchInvoices(), pics: (await query('SELECT id, name, phone, created_at AS createdAt FROM pics ORDER BY created_at')) }));
 app.put('/api/data', requireAuth, allow('admin'), async (req, res) => {
   const conn = await pool.getConnection(); try { await conn.beginTransaction(); await conn.execute('DELETE FROM office_addresses'); for (const address of req.body.addresses || []) await conn.execute('INSERT INTO office_addresses (id, name, full_address) VALUES (?, ?, ?)', [address.id || crypto.randomUUID(), address.name, address.fullAddress]); for (const invoice of req.body.invoices || []) await writeInvoice(conn, invoice, req.user.sub); await conn.commit(); res.json({ ok: true }); } catch (error) { await conn.rollback(); throw error; } finally { conn.release(); }
 });
@@ -95,10 +95,10 @@ app.delete('/api/users/:id', requireAuth, allow('admin'), resolveManageableUser,
 });
 // PIC contacts appear at the bottom of every invoice so customers know whom to call.
 app.post('/api/pics', requireAuth, allow('admin'), async (req, res) => {
-  const { name, role, phone } = req.body || {};
-  if (!name || !role || !phone) return res.status(400).json({ message: 'Nama, jabatan, dan nomor telepon PIC wajib diisi.' });
-  const pic = { id: crypto.randomUUID(), name: String(name).trim(), role: String(role).trim(), phone: String(phone).trim() };
-  await query('INSERT INTO pics (id, name, role, phone) VALUES (?, ?, ?, ?)', [pic.id, pic.name, pic.role, pic.phone]);
+  const { name, phone } = req.body || {};
+  if (!name || !phone) return res.status(400).json({ message: 'Nama dan nomor telepon PIC wajib diisi.' });
+  const pic = { id: crypto.randomUUID(), name: String(name).trim(), phone: String(phone).trim() };
+  await query('INSERT INTO pics (id, name, phone) VALUES (?, ?, ?)', [pic.id, pic.name, pic.phone]);
   res.status(201).json(pic);
 });
 app.delete('/api/pics/:id', requireAuth, allow('admin'), async (req, res) => {
