@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS invoices (
   payment_status ENUM('auto','dp','lunas') NOT NULL DEFAULT 'auto',
   terms TEXT NULL,
   notes TEXT NULL,
+  pic_name VARCHAR(160) NULL,
+  pic_phone VARCHAR(40) NULL,
   created_by CHAR(36) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

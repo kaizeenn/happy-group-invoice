@@ -36,7 +36,7 @@ async function resolveManageableUser(req, res, next) {
   next();
 }
 const sqlDate = value => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
-const toInvoice = invoice => ({ ...invoice, issueDate: sqlDate(invoice.issue_date), companyAddress: invoice.company_address, customerAddress: invoice.customer_address || '', customerPhone: invoice.customer_phone || '', paymentStatus: invoice.payment_status, items: [], payments: [] });
+const toInvoice = invoice => ({ ...invoice, issueDate: sqlDate(invoice.issue_date), companyAddress: invoice.company_address, customerAddress: invoice.customer_address || '', customerPhone: invoice.customer_phone || '', paymentStatus: invoice.payment_status, picName: invoice.pic_name || '', picPhone: invoice.pic_phone || '', items: [], payments: [] });
 
 async function fetchInvoices() {
   const invoices = (await query(`SELECT i.*, u.name AS created_by_name FROM invoices i JOIN users u ON u.id=i.created_by ORDER BY i.issue_date DESC, i.created_at DESC`)).map(toInvoice);
@@ -53,12 +53,12 @@ async function fetchInvoices() {
 }
 async function writeInvoice(conn, incoming, userId) {
   const invoice = { ...incoming, id: incoming.id || crypto.randomUUID() };
-  const fields = [invoice.number, invoice.issueDate, invoice.companyAddress || '', invoice.customer, invoice.customerAddress || '', invoice.customerPhone || '', invoice.paymentStatus || 'auto', invoice.terms || '', invoice.notes || '', userId];
+  const fields = [invoice.number, invoice.issueDate, invoice.companyAddress || '', invoice.customer, invoice.customerAddress || '', invoice.customerPhone || '', invoice.paymentStatus || 'auto', invoice.terms || '', invoice.notes || '', invoice.picName || '', invoice.picPhone || '', userId];
   // A duplicate invoice number may belong to a previous client-generated UUID.
   // Resolve that row first, so children always use the actual parent id.
   const existing = await conn.execute('SELECT id FROM invoices WHERE id = ? OR number = ? LIMIT 1', [invoice.id, invoice.number]);
   if (existing[0].length) invoice.id = existing[0][0].id;
-  await conn.execute(`INSERT INTO invoices (id, number, issue_date, company_address, customer, customer_address, customer_phone, payment_status, terms, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE number=VALUES(number), issue_date=VALUES(issue_date), company_address=VALUES(company_address), customer=VALUES(customer), customer_address=VALUES(customer_address), customer_phone=VALUES(customer_phone), payment_status=VALUES(payment_status), terms=VALUES(terms), notes=VALUES(notes)`, [invoice.id, ...fields]);
+  await conn.execute(`INSERT INTO invoices (id, number, issue_date, company_address, customer, customer_address, customer_phone, payment_status, terms, notes, pic_name, pic_phone, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE number=VALUES(number), issue_date=VALUES(issue_date), company_address=VALUES(company_address), customer=VALUES(customer), customer_address=VALUES(customer_address), customer_phone=VALUES(customer_phone), payment_status=VALUES(payment_status), terms=VALUES(terms), notes=VALUES(notes), pic_name=VALUES(pic_name), pic_phone=VALUES(pic_phone)`, [invoice.id, ...fields]);
   await conn.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [invoice.id]);
   await conn.execute('DELETE FROM payments WHERE invoice_id = ?', [invoice.id]);
   for (const [sort, item] of (invoice.items || []).entries()) await conn.execute('INSERT INTO invoice_items (id, invoice_id, description, detail, note, price, quantity, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [item.id || crypto.randomUUID(), invoice.id, item.description || '', item.detail || '', item.note || '', Number(item.price || 0), Number(item.quantity || 1), sort]);
