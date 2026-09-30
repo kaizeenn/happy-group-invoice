@@ -29,6 +29,9 @@ const addresses = [
 ];
 for (const [id, name, fullAddress] of addresses) await query('INSERT IGNORE INTO office_addresses (id, name, full_address) VALUES (?, ?, ?)', [id, name, fullAddress]);
 
+const defaultBankAccounts = 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI';
+await query('INSERT IGNORE INTO company_settings (id, bank_accounts) VALUES (1, ?)', [defaultBankAccounts]);
+
 const superAdminUsername = process.env.SUPER_ADMIN_USERNAME || process.env.ADMIN_USERNAME || 'admin';
 const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'GantiPasswordSuperAdmin123!';
 const existingSuperAdmin = await query("SELECT id FROM users WHERE role = 'super_admin' LIMIT 1");

@@ -66,6 +66,11 @@ async function writeInvoice(conn, incoming, userId) {
   return invoice;
 }
 
+async function fetchSettings() {
+  const rows = await query('SELECT bank_accounts AS bankAccounts FROM company_settings WHERE id = 1');
+  return rows[0] || { bankAccounts: 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI' };
+}
+
 app.get('/api/health', async (_, res) => { try { await query('SELECT 1'); res.json({ ok: true, database: 'mysql' }); } catch { res.status(503).json({ ok: false, database: 'unavailable' }); } });
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {}; if (!username || !password) return res.status(400).json({ message: 'Username dan password wajib diisi.' });
@@ -74,7 +79,14 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token: sign(users[0]), user: publicUser(users[0]) });
 });
 app.get('/api/auth/me', requireAuth, async (req, res) => { const users = await query('SELECT * FROM users WHERE id = ?', [req.user.sub]); if (!users.length) return res.status(401).json({ message: 'Pengguna tidak ditemukan.' }); res.json(publicUser(users[0])); });
-app.get('/api/data', requireAuth, async (_, res) => res.json({ addresses: (await query('SELECT id, name, full_address AS fullAddress FROM office_addresses ORDER BY name')), invoices: await fetchInvoices(), pics: (await query('SELECT id, name, phone, created_at AS createdAt FROM pics ORDER BY created_at')) }));
+app.get('/api/data', requireAuth, async (_, res) => res.json({ addresses: (await query('SELECT id, name, full_address AS fullAddress FROM office_addresses ORDER BY name')), invoices: await fetchInvoices(), pics: (await query('SELECT id, name, phone, created_at AS createdAt FROM pics ORDER BY created_at')), settings: await fetchSettings() }));
+app.get('/api/settings', requireAuth, async (_, res) => res.json(await fetchSettings()));
+app.put('/api/settings', requireAuth, allow('admin'), async (req, res) => {
+  const bankAccounts = String(req.body?.bankAccounts || '').trim();
+  if (!bankAccounts) return res.status(400).json({ message: 'Rekening bank tidak boleh kosong.' });
+  await query('INSERT INTO company_settings (id, bank_accounts) VALUES (1, ?) ON DUPLICATE KEY UPDATE bank_accounts = VALUES(bank_accounts)', [bankAccounts]);
+  res.json(await fetchSettings());
+});
 app.put('/api/data', requireAuth, allow('admin'), async (req, res) => {
   const conn = await pool.getConnection(); try { await conn.beginTransaction(); await conn.execute('DELETE FROM office_addresses'); for (const address of req.body.addresses || []) await conn.execute('INSERT INTO office_addresses (id, name, full_address) VALUES (?, ?, ?)', [address.id || crypto.randomUUID(), address.name, address.fullAddress]); for (const invoice of req.body.invoices || []) await writeInvoice(conn, invoice, req.user.sub); await conn.commit(); res.json({ ok: true }); } catch (error) { await conn.rollback(); throw error; } finally { conn.release(); }
 });
