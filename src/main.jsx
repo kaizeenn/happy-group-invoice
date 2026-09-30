@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { jsPDF } from 'jspdf';
-import { Plus, ReceiptText, Building2, MapPin, Pencil, Trash2, X, Download, CheckCircle2, WalletCards, ChevronRight, FileText, Eye, Share2, ArrowRight, ClipboardList, Search, Contact } from 'lucide-react';
+import { Plus, ReceiptText, Building2, MapPin, Pencil, Trash2, X, Download, CheckCircle2, WalletCards, ChevronRight, FileText, Eye, Share2, ArrowRight, ClipboardList, Search, Contact, Bell, AlertTriangle } from 'lucide-react';
 import './styles.css';
 
 // Production is served by Express/Caddy on the same origin. Vite development keeps
@@ -21,6 +21,16 @@ const recordedPaid = invoice => invoice.payments.reduce((sum, payment) => sum + 
 const paidOf = invoice => invoice.paymentStatus === 'lunas' ? totalOf(invoice) : recordedPaid(invoice);
 const dueOf = invoice => Math.max(0, totalOf(invoice) - paidOf(invoice));
 const statusOf = invoice => dueOf(invoice) < 1 && totalOf(invoice) > 0 ? 'LUNAS' : paidOf(invoice) > 0 || invoice.paymentStatus === 'dp' ? 'DP / SEBAGIAN' : 'BELUM LUNAS';
+const getOverdueDays = (invoice, baseDate = new Date()) => {
+  if (!invoice || statusOf(invoice) === 'LUNAS') return 0;
+  if (!invoice.issueDate) return 0;
+  const issue = new Date(`${invoice.issueDate}T00:00:00`);
+  if (Number.isNaN(issue.getTime())) return 0;
+  const diffTime = baseDate.getTime() - issue.getTime();
+  const days = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return days > 0 ? days : 0;
+};
+const isOverdue = invoice => getOverdueDays(invoice) > 30;
 const imageToDataUrl = async src => { const response = await fetch(src); const blob = await response.blob(); return new Promise(resolve => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); }); };
 
 class AppErrorBoundary extends React.Component {
@@ -35,6 +45,10 @@ function App() {
   const [data, setData] = useState({ addresses: [], invoices: [], pics: [], settings: { bankAccounts: 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI' } });
   const [session, setSession] = useState(() => { try { return JSON.parse(localStorage.getItem('happy-session')); } catch { return null; } });
   const [tab, setTab] = useState('dashboard'); const [editor, setEditor] = useState(null); const [addressModal, setAddressModal] = useState(false); const [bankModal, setBankModal] = useState(false); const [preview, setPreview] = useState(null); const [paymentInvoice, setPaymentInvoice] = useState(null); const [loading, setLoading] = useState(Boolean(session));
+  const [invoiceFilter, setInvoiceFilter] = useState('all');
+  const [showNotif, setShowNotif] = useState(false);
+  const notifRef = useRef(null);
+
   const request = async (path, options = {}) => { const response = await fetch(`${API}${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}), ...(options.headers || {}) } }); const body = response.status === 204 ? null : await response.json(); if (!response.ok) throw new Error(body?.message || 'Permintaan gagal.'); return body; };
   const load = async () => { setLoading(true); try { setData(await request('/data')); } catch (error) { if (error.message.includes('Sesi')) { localStorage.removeItem('happy-session'); setSession(null); } } finally { setLoading(false); } };
   // Load data whenever a user logs in. Previously this ran only on the first
@@ -48,23 +62,119 @@ function App() {
   const saveBankAccounts = async bankAccounts => { try { const saved = await request('/settings', { method:'PUT', body:JSON.stringify({ bankAccounts }) }); setData(prev => ({ ...prev, settings: saved })); setBankModal(false); } catch(error) { alert(error.message); } };
   const createUser = async user => { const created = await request('/users', { method:'POST', body:JSON.stringify(user) }); return created; };
   const totals = useMemo(() => ({ total: data.invoices.reduce((a, i) => a + totalOf(i), 0), paid: data.invoices.reduce((a, i) => a + paidOf(i), 0), due: data.invoices.reduce((a, i) => a + dueOf(i), 0) }), [data]);
+  const overdueInvoices = useMemo(() => data.invoices.filter(isOverdue).sort((a, b) => getOverdueDays(b) - getOverdueDays(a)), [data.invoices]);
+
+  useEffect(() => {
+    const handleClickOutside = event => {
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setShowNotif(false);
+      }
+    };
+    if (showNotif) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showNotif]);
+
   if (!session) return <Login onLogin={login}/>; if (loading) return <div className="loading">Memuat Happy Group Invoice…</div>;
   const admin = ['admin', 'super_admin'].includes(session.user.role); const superAdmin = session.user.role === 'super_admin';
-  return <main className="shell"><aside><img src="/assets/images/happy_group_logo.png" className="side-logo"/><p className="tagline">INVOICE MANAGEMENT</p><nav>{[['dashboard', ReceiptText, 'Beranda'], ['invoices', ReceiptText, 'Invoice'], ...(admin ? [['company', Building2, 'Perusahaan'], ['pic', Contact, 'PIC'], ['users', WalletCards, 'Pengguna']] : [])].map(([id, Icon, label]) => <button className={tab === id ? 'active' : ''} onClick={() => setTab(id)} key={id}><Icon size={19}/>{label}</button>)}</nav><div className="user-panel"><b>{session.user.name}</b><span>{superAdmin ? 'Super Admin' : admin ? 'Administrator' : 'User'}</span><button onClick={logout}>Keluar</button></div></aside><section className="content"><header><div><p className="eyebrow">PT. HAPPY TRANS HARYADI</p><h1>{tab === 'dashboard' ? 'Ringkasan bisnis' : tab === 'invoices' ? 'Semua invoice' : tab === 'users' ? 'Pengaturan pengguna' : 'Profil perusahaan'}</h1></div><button className="header-create" onClick={() => setEditor(emptyInvoice(data.addresses, data.pics))}><Plus size={18}/> Buat Invoice</button></header>{tab === 'dashboard' && <Dashboard totals={totals} invoices={data.invoices} open={setEditor} preview={setPreview} showAll={() => setTab('invoices')}/>} {tab === 'invoices' && <Invoices invoices={data.invoices} preview={setPreview} remove={removeInvoice}/>} {tab === 'company' && admin && <Company addresses={data.addresses} openAddresses={() => setAddressModal(true)} bankAccounts={data.settings?.bankAccounts} openBankAccounts={() => setBankModal(true)}/>} {tab === 'pic' && admin && <Pics data={data} setData={setData} request={request}/>} {tab === 'users' && admin && <Users request={request} createUser={createUser} actorRole={session.user.role}/>}</section>{editor && <InvoiceEditor initial={editor} addresses={data.addresses} pics={data.pics} onClose={() => setEditor(null)} onSave={saveInvoice}/>} {preview && <PdfPreview invoice={preview} bankAccounts={data.settings?.bankAccounts} onClose={() => setPreview(null)} onEdit={() => { setEditor(preview); setPreview(null); }} onAddPayment={() => { setPaymentInvoice(preview); setPreview(null); }}/>} {paymentInvoice && <PaymentModal invoice={paymentInvoice} onClose={() => setPaymentInvoice(null)} onSave={payment => { saveInvoice({ ...paymentInvoice, payments: [...paymentInvoice.payments, payment] }); setPaymentInvoice(null); }}/>} {addressModal && <AddressSettings addresses={data.addresses} onClose={() => setAddressModal(false)} onSave={saveAddresses}/>} {bankModal && <BankSettingsModal initial={data.settings?.bankAccounts} onClose={() => setBankModal(false)} onSave={saveBankAccounts}/>}</main>;
+  return <main className="shell"><aside><img src="/assets/images/happy_group_logo.png" className="side-logo"/><p className="tagline">INVOICE MANAGEMENT</p><nav>{[['dashboard', ReceiptText, 'Beranda'], ['invoices', ReceiptText, 'Invoice'], ...(admin ? [['company', Building2, 'Perusahaan'], ['pic', Contact, 'PIC'], ['users', WalletCards, 'Pengguna']] : [])].map(([id, Icon, label]) => <button className={tab === id ? 'active' : ''} onClick={() => setTab(id)} key={id}><Icon size={19}/>{label}</button>)}</nav><div className="user-panel"><b>{session.user.name}</b><span>{superAdmin ? 'Super Admin' : admin ? 'Administrator' : 'User'}</span><button onClick={logout}>Keluar</button></div></aside><section className="content"><header><div><p className="eyebrow">PT. HAPPY TRANS HARYADI</p><h1>{tab === 'dashboard' ? 'Ringkasan bisnis' : tab === 'invoices' ? 'Semua invoice' : tab === 'users' ? 'Pengaturan pengguna' : 'Profil perusahaan'}</h1></div><div className="header-actions"><div className="notif-wrapper" ref={notifRef}><button type="button" className={`notif-btn ${overdueInvoices.length ? 'has-badge' : ''}`} onClick={() => setShowNotif(prev => !prev)} title={overdueInvoices.length ? `${overdueInvoices.length} invoice melewati batas 30 hari` : 'Notifikasi pengingat'} aria-label="Pengingat penagihan"><Bell size={19}/>{overdueInvoices.length > 0 && <span className="notif-badge">{overdueInvoices.length}</span>}</button>{showNotif && <div className="notif-popover"><div className="notif-header"><div className="notif-title"><AlertTriangle size={16}/><b>Pengingat Penagihan (&gt;30 Hari)</b></div><button type="button" className="notif-close" onClick={() => setShowNotif(false)} aria-label="Tutup"><X size={15}/></button></div>{overdueInvoices.length === 0 ? <div className="notif-empty"><CheckCircle2 size={30} color="#168246"/><p>Tidak ada invoice yang melewati 30 hari.</p></div> : <><div className="notif-summary-bar"><span><b>{overdueInvoices.length}</b> invoice perlu ditagih</span><button type="button" onClick={() => { setInvoiceFilter('overdue'); setTab('invoices'); setShowNotif(false); }}>Lihat semua <ArrowRight size={13}/></button></div><div className="notif-list">{overdueInvoices.slice(0, 6).map(inv => { const days = getOverdueDays(inv); return <div key={inv.id} className="notif-item" onClick={() => { setPreview(inv); setShowNotif(false); }}><div className="notif-item-top"><b>{inv.customer || 'Pelanggan'}</b><span className="notif-tag">Lewat {days} hr</span></div><div className="notif-item-sub"><span>{inv.number}</span><b className="notif-due">{IDR.format(dueOf(inv))}</b></div></div>; })}</div></>}</div>}</div><button className="header-create" onClick={() => setEditor(emptyInvoice(data.addresses, data.pics))}><Plus size={18}/> Buat Invoice</button></div></header>{tab === 'dashboard' && <Dashboard totals={totals} invoices={data.invoices} open={setEditor} preview={setPreview} showAll={() => { setInvoiceFilter('all'); setTab('invoices'); }} onFilterOverdue={() => { setInvoiceFilter('overdue'); setTab('invoices'); }}/>} {tab === 'invoices' && <Invoices invoices={data.invoices} preview={setPreview} remove={removeInvoice} filter={invoiceFilter} onFilterChange={setInvoiceFilter}/>} {tab === 'company' && admin && <Company addresses={data.addresses} openAddresses={() => setAddressModal(true)} bankAccounts={data.settings?.bankAccounts} openBankAccounts={() => setBankModal(true)}/>} {tab === 'pic' && admin && <Pics data={data} setData={setData} request={request}/>} {tab === 'users' && admin && <Users request={request} createUser={createUser} actorRole={session.user.role}/>}</section>{editor && <InvoiceEditor initial={editor} addresses={data.addresses} pics={data.pics} onClose={() => setEditor(null)} onSave={saveInvoice}/>} {preview && <PdfPreview invoice={preview} bankAccounts={data.settings?.bankAccounts} onClose={() => setPreview(null)} onEdit={() => { setEditor(preview); setPreview(null); }} onAddPayment={() => { setPaymentInvoice(preview); setPreview(null); }}/>} {paymentInvoice && <PaymentModal invoice={paymentInvoice} onClose={() => setPaymentInvoice(null)} onSave={payment => { saveInvoice({ ...paymentInvoice, payments: [...paymentInvoice.payments, payment] }); setPaymentInvoice(null); }}/>} {addressModal && <AddressSettings addresses={data.addresses} onClose={() => setAddressModal(false)} onSave={saveAddresses}/>} {bankModal && <BankSettingsModal initial={data.settings?.bankAccounts} onClose={() => setBankModal(false)} onSave={saveBankAccounts}/>}</main>;
 }
 
 function Login({ onLogin }) { const [username,setUsername]=useState(''); const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false); const submit=async e=>{e.preventDefault();setBusy(true);setError('');try{await onLogin(username,password);}catch(err){setError(err.message);}finally{setBusy(false);}}; return <main className="login-page"><form className="login-card" onSubmit={submit}><img src="/assets/images/happy_group_logo.png"/><p className="eyebrow">HAPPY GROUP INVOICE</p><h1>Masuk ke akun Anda</h1><p className="login-copy">Gunakan username dan password yang diberikan administrator.</p><label>Username<input value={username} onChange={e=>setUsername(e.target.value)} required autoFocus placeholder="Username"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Password"/></label>{error&&<p className="login-error">{error}</p>}<button className="primary" disabled={busy}>{busy?'Memeriksa akun…':'Masuk'}</button></form></main> }
-function Dashboard({ totals, invoices, open, preview, showAll }) { return <><div className="hero"><div><p>RINGKASAN TAGIHAN AKTIF</p><strong>{IDR.format(totals.total)}</strong><div className="hero-values"><span>Sudah diterima <b>{IDR.format(totals.paid)}</b></span><span>Perlu ditagih <b>{IDR.format(totals.due)}</b></span></div></div><div className="hero-guide"><ClipboardList size={30}/><b>Mulai dari invoice baru</b><span>Isi pelanggan, layanan, lalu simpan.</span></div></div><div className="stats"><Stat label="Invoice lunas" value={invoices.filter(i => statusOf(i) === 'LUNAS').length} tone="green"/><Stat label="Perlu ditindaklanjuti" value={invoices.filter(i => statusOf(i) !== 'LUNAS').length} tone="red"/></div><div className="section-title"><div><p className="eyebrow">AKTIVITAS TERBARU</p><h2>Invoice terbaru</h2></div><button onClick={showAll}>Buka riwayat <ArrowRight size={16}/></button></div><InvoiceTable invoices={invoices.slice(0, 5)} open={open} preview={preview}/></> }
+function Dashboard({ totals, invoices, open, preview, showAll, onFilterOverdue }) {
+  const overdueInvoices = useMemo(() => invoices.filter(isOverdue), [invoices]);
+  const overdueDue = useMemo(() => overdueInvoices.reduce((sum, inv) => sum + dueOf(inv), 0), [overdueInvoices]);
+  return <>
+    {overdueInvoices.length > 0 && (
+      <div className="overdue-banner" onClick={onFilterOverdue} role="button" tabIndex={0}>
+        <div className="overdue-banner-icon"><AlertTriangle size={22}/></div>
+        <div className="overdue-banner-info">
+          <b>Peringatan: {overdueInvoices.length} Invoice Melewati Batas 30 Hari!</b>
+          <p>Total tagihan tertunggak: <strong>{IDR.format(overdueDue)}</strong>. Klik di sini untuk melihat daftar tagihan.</p>
+        </div>
+        <div className="overdue-banner-action">Lihat tagihan <ArrowRight size={16}/></div>
+      </div>
+    )}
+    <div className="hero"><div><p>RINGKASAN TAGIHAN AKTIF</p><strong>{IDR.format(totals.total)}</strong><div className="hero-values"><span>Sudah diterima <b>{IDR.format(totals.paid)}</b></span><span>Perlu ditagih <b>{IDR.format(totals.due)}</b></span></div></div><div className="hero-guide"><ClipboardList size={30}/><b>Mulai dari invoice baru</b><span>Isi pelanggan, layanan, lalu simpan.</span></div></div>
+    <div className="stats"><Stat label="Invoice lunas" value={invoices.filter(i => statusOf(i) === 'LUNAS').length} tone="green"/><Stat label="Perlu ditindaklanjuti" value={invoices.filter(i => statusOf(i) !== 'LUNAS').length} tone="red"/></div>
+    <div className="section-title"><div><p className="eyebrow">AKTIVITAS TERBARU</p><h2>Invoice terbaru</h2></div><button onClick={showAll}>Buka riwayat <ArrowRight size={16}/></button></div>
+    <InvoiceTable invoices={invoices.slice(0, 5)} open={open} preview={preview}/>
+  </>;
+}
 function Stat({ label, value, tone }) { return <div className={`stat ${tone}`}><span>{label}</span><b>{value}</b></div> }
-function Invoices({ invoices, preview, remove }) { const [search, setSearch] = useState(''); const keyword = search.trim().toLocaleLowerCase('id-ID'); const visibleInvoices = keyword ? invoices.filter(invoice => `${invoice.customer || ''} ${invoice.number || ''}`.toLocaleLowerCase('id-ID').includes(keyword)) : invoices; return <><div className="history-intro"><div><p className="eyebrow">RIWAYAT INVOICE</p><h2>Kelola tagihan Anda</h2><p>{invoices.length ? 'Cari berdasarkan nama pelanggan atau nomor invoice, lalu klik invoice untuk melihat detail.' : 'Buat invoice pertama untuk mulai mencatat tagihan. Pencarian akan siap digunakan saat riwayat bertambah.'}</p></div></div><div className="invoice-search"><Search size={19}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Cari nama pelanggan atau nomor invoice…" aria-label="Cari invoice"/>{search && <button onClick={() => setSearch('')} aria-label="Hapus pencarian"><X size={16}/></button>}<span>{keyword ? `${visibleInvoices.length} ditemukan` : `${invoices.length} invoice`}</span></div>{keyword && !visibleInvoices.length ? <div className="empty search-empty"><Search size={38}/><h3>Invoice tidak ditemukan</h3><p>{invoices.length ? `Tidak ada nama pelanggan atau nomor invoice yang cocok dengan “${search}”.` : 'Belum ada invoice yang dapat dicari.'}</p><button onClick={() => setSearch('')}>Hapus pencarian</button></div> : <InvoiceTable invoices={visibleInvoices} preview={preview} remove={remove}/>}</> }
+function Invoices({ invoices, preview, remove, filter = 'all', onFilterChange }) {
+  const [search, setSearch] = useState('');
+  const keyword = search.trim().toLocaleLowerCase('id-ID');
+
+  const overdueCount = useMemo(() => invoices.filter(isOverdue).length, [invoices]);
+  const unpaidCount = useMemo(() => invoices.filter(i => statusOf(i) !== 'LUNAS').length, [invoices]);
+  const paidCount = useMemo(() => invoices.filter(i => statusOf(i) === 'LUNAS').length, [invoices]);
+
+  const filtered = useMemo(() => {
+    return invoices.filter(invoice => {
+      if (filter === 'overdue') return isOverdue(invoice);
+      if (filter === 'unpaid') return statusOf(invoice) !== 'LUNAS';
+      if (filter === 'paid') return statusOf(invoice) === 'LUNAS';
+      return true;
+    });
+  }, [invoices, filter]);
+
+  const visibleInvoices = keyword ? filtered.filter(invoice => `${invoice.customer || ''} ${invoice.number || ''}`.toLocaleLowerCase('id-ID').includes(keyword)) : filtered;
+
+  return <>
+    <div className="history-intro">
+      <div>
+        <p className="eyebrow">RIWAYAT INVOICE</p>
+        <h2>Kelola tagihan Anda</h2>
+        <p>{invoices.length ? 'Cari berdasarkan nama pelanggan atau nomor invoice, gunakan filter status, lalu klik invoice untuk melihat detail.' : 'Buat invoice pertama untuk mulai mencatat tagihan.'}</p>
+      </div>
+    </div>
+    <div className="invoice-toolbar">
+      <div className="invoice-filters">
+        <button type="button" className={`filter-btn ${filter === 'all' ? 'active' : ''}`} onClick={() => onFilterChange('all')}>Semua ({invoices.length})</button>
+        <button type="button" className={`filter-btn ${filter === 'unpaid' ? 'active' : ''}`} onClick={() => onFilterChange('unpaid')}>Belum Lunas ({unpaidCount})</button>
+        <button type="button" className={`filter-btn ${filter === 'paid' ? 'active' : ''}`} onClick={() => onFilterChange('paid')}>Lunas ({paidCount})</button>
+        <button type="button" className={`filter-btn overdue ${filter === 'overdue' ? 'active' : ''}`} onClick={() => onFilterChange('overdue')}>
+          <AlertTriangle size={14}/> &gt; 30 Hari ({overdueCount})
+        </button>
+      </div>
+      <div className="invoice-search">
+        <Search size={19}/>
+        <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Cari nama pelanggan atau nomor invoice…" aria-label="Cari invoice"/>
+        {search && <button type="button" onClick={() => setSearch('')} aria-label="Hapus pencarian"><X size={16}/></button>}
+        <span>{keyword ? `${visibleInvoices.length} ditemukan` : `${filtered.length} invoice`}</span>
+      </div>
+    </div>
+    {keyword && !visibleInvoices.length ? (
+      <div className="empty search-empty">
+        <Search size={38}/>
+        <h3>Invoice tidak ditemukan</h3>
+        <p>Tidak ada invoice yang cocok dengan “{search}” pada filter ini.</p>
+        <button onClick={() => setSearch('')}>Hapus pencarian</button>
+      </div>
+    ) : filter === 'overdue' && !visibleInvoices.length ? (
+      <div className="empty">
+        <CheckCircle2 size={38} color="#168246"/>
+        <h3>Tidak ada invoice &gt; 30 hari</h3>
+        <p>Semua tagihan tertagih tepat waktu atau sudah lunas.</p>
+        <button onClick={() => onFilterChange('all')}>Tampilkan semua invoice</button>
+      </div>
+    ) : (
+      <InvoiceTable invoices={visibleInvoices} preview={preview} remove={remove}/>
+    )}
+  </>;
+}
 function InvoiceTable({ invoices, open, preview, remove }) {
   if (!invoices.length) return <div className="empty"><ReceiptText size={38}/><h3>Belum ada invoice</h3><p>Buat invoice pertama Anda untuk mulai mencatat tagihan.</p></div>;
   return <div className="invoice-list">{invoices.map(invoice => {
     const isPaid = statusOf(invoice) === 'LUNAS';
-    return <article className="invoice-card" key={invoice.id} onClick={() => preview(invoice)}>
-      <div className={`history-mark ${isPaid ? 'done' : ''}`}>{isPaid ? <CheckCircle2 size={21}/> : <ReceiptText size={20}/>}</div>
+    const overdueDays = getOverdueDays(invoice);
+    const overdue = overdueDays > 30;
+    return <article className={`invoice-card ${overdue ? 'is-overdue' : ''}`} key={invoice.id} onClick={() => preview(invoice)}>
+      <div className={`history-mark ${isPaid ? 'done' : overdue ? 'overdue' : ''}`}>{isPaid ? <CheckCircle2 size={21}/> : overdue ? <AlertTriangle size={20}/> : <ReceiptText size={20}/>}</div>
       <div className="invoice-info"><h3>{invoice.customer || 'Pelanggan belum diisi'}</h3><p>{invoice.number} · {dateId.format(new Date(invoice.issueDate))}</p><b className="history-total">{IDR.format(totalOf(invoice))}</b></div>
-      <div className="history-actions"><span className={`pill ${isPaid ? 'paid' : ''}`}>{statusOf(invoice)}</span><span className="open-invoice">Buka <ArrowRight size={16}/></span>{remove && <button className="icon-danger" title="Hapus invoice" onClick={e => { e.stopPropagation(); remove(invoice.id); }}><Trash2 size={17}/></button>}</div>
+      <div className="history-actions">{overdue && <span className="pill overdue">🔴 Lewat {overdueDays} hr</span>}<span className={`pill ${isPaid ? 'paid' : ''}`}>{statusOf(invoice)}</span><span className="open-invoice">Buka <ArrowRight size={16}/></span>{remove && <button className="icon-danger" title="Hapus invoice" onClick={e => { e.stopPropagation(); remove(invoice.id); }}><Trash2 size={17}/></button>}</div>
     </article>;
   })}</div>
 }

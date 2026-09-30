@@ -26,3 +26,61 @@
 
 .pdf-pics{margin-top:14px}.pdf-pics span{display:block;color:#ef2624;font:800 12px 'Plus Jakarta Sans';letter-spacing:1.2px;margin-bottom:8px}.pdf-pics p{margin:0;white-space:pre-line;font-size:11px;line-height:1.5}.pic-empty{padding:16px;color:var(--muted);font-size:12px;border:1px dashed var(--line);border-radius:10px;margin:10px 0}.role-badge.wa{color:#176d40;background:#e8f7ed}.role-badge.wa:hover{background:#dcf2e3}
 @media(max-width:760px){.pdf-pics{margin-top:9px}.pdf-pics span{font-size:8px;margin-bottom:5px}.pdf-pics p{font-size:7px}}
+
+/* Overdue In-App Notifications & Filters */
+.header-actions{display:flex;align-items:center;gap:10px}
+.notif-wrapper{position:relative}
+.notif-btn{position:relative;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:#fff;border:1px solid var(--line);color:#4b4441;transition:all .18s;box-shadow:0 2px 6px #00000008}
+.notif-btn:hover{background:#fff3f2;border-color:#f5b5b0;color:var(--red)}
+.notif-btn.has-badge{color:var(--red)}
+.notif-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;background:var(--red);color:#fff;font-size:10px;font-weight:800;border-radius:100px;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fff}
+.notif-popover{position:absolute;right:0;top:calc(100% + 10px);width:350px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 16px 42px #261e1b20;z-index:90;overflow:hidden;animation:popIn .18s ease-out}
+@keyframes popIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.notif-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);background:#faf8f7}
+.notif-title{display:flex;align-items:center;gap:7px;color:var(--red);font-size:13px;font-weight:700}
+.notif-close{width:26px;height:26px;display:grid;place-items:center;border-radius:8px;color:#857e7b}
+.notif-close:hover{background:#f0ebe8;color:var(--ink)}
+.notif-empty{padding:32px 20px;text-align:center;display:grid;gap:8px;place-items:center;color:var(--muted);font-size:12px}
+.notif-summary-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fff6f5;border-bottom:1px solid #fae1de;font-size:11px;color:#7e534f}
+.notif-summary-bar button{display:flex;align-items:center;gap:4px;color:var(--red);font-weight:800;font-size:11px}
+.notif-list{max-height:310px;overflow-y:auto;padding:4px 0}
+.notif-item{padding:11px 16px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .15s}
+.notif-item:last-child{border-bottom:0}
+.notif-item:hover{background:#fff5f4}
+.notif-item-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px}
+.notif-item-top b{font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.notif-tag{font-size:9px;font-weight:800;color:var(--red);background:#ffebe9;padding:3px 6px;border-radius:6px;white-space:nowrap}
+.notif-item-sub{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted)}
+.notif-due{color:var(--red);font-weight:700}
+
+/* Overdue Banner on Dashboard */
+.overdue-banner{display:flex;align-items:center;gap:14px;background:#fff4f2;border:1px solid #ffd4ce;border-left:5px solid var(--red);border-radius:16px;padding:14px 18px;margin-bottom:22px;cursor:pointer;transition:transform .18s,box-shadow .18s}
+.overdue-banner:hover{transform:translateY(-1px);box-shadow:0 8px 20px #e5232212;border-color:#ffb8af}
+.overdue-banner-icon{width:40px;height:40px;border-radius:12px;background:#ffe6e4;color:var(--red);display:grid;place-items:center;flex-shrink:0}
+.overdue-banner-info{flex:1;min-width:0}
+.overdue-banner-info b{display:block;font-size:14px;color:#a81c1c;margin-bottom:2px}
+.overdue-banner-info p{margin:0;font-size:12px;color:#7e534f;line-height:1.4}
+.overdue-banner-info strong{color:#a81c1c}
+.overdue-banner-action{display:flex;align-items:center;gap:5px;color:var(--red);font-size:12px;font-weight:800;white-space:nowrap;flex-shrink:0}
+
+/* Filter Toolbar */
+.invoice-toolbar{margin-bottom:18px;display:grid;gap:12px}
+.invoice-filters{display:flex;flex-wrap:wrap;gap:8px}
+.filter-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;background:#fff;border:1px solid var(--line);font-size:12px;font-weight:700;color:#615a57;transition:all .15s}
+.filter-btn:hover{background:#faf8f7;border-color:#ded8d5}
+.filter-btn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.filter-btn.overdue{color:#b62624;background:#fff7f6;border-color:#ffd5d1}
+.filter-btn.overdue:hover{background:#ffebe9;border-color:#fcaaa3}
+.filter-btn.overdue.active{background:var(--red);color:#fff;border-color:var(--red)}
+
+/* Invoice Card Overdue Highlights */
+.invoice-card.is-overdue{border-color:#ffd5d0;background:#fffdfd}
+.history-mark.overdue{background:#ffebe8;color:var(--red)}
+.pill.overdue{background:#ffe9e7;color:#b62624;border:1px solid #ffd2cc}
+
+@media(max-width:760px){
+  .notif-popover{position:fixed;top:65px;left:14px;right:14px;width:auto}
+  .overdue-banner{flex-direction:column;align-items:flex-start;gap:10px;padding:12px 14px}
+  .overdue-banner-action{align-self:flex-end}
+  .invoice-filters{overflow-x:auto;padding-bottom:4px;flex-wrap:nowrap}
+}
