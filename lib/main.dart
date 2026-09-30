@@ -791,7 +791,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 20),
       _infoBox(
         'PT. Happy Trans Haryadi',
-        'Jl. Imogiri Barat Km 7, Bangunharjo, Kec. Sewon, Kab. Bantul, Yogyakarta 55188\n+62 811-2867-917',
+        'Jl. Imogiri Barat Km 7, Bangunharjo, Kec. Sewon, Kab. Bantul, Yogyakarta 55188\n0811 2867 917',
       ),
       const SizedBox(height: 12),
       _infoBox(
@@ -2180,8 +2180,8 @@ class _InvoiceDetailState extends State<InvoiceDetail> {
                                   'Catatan: ${e.note}',
                                   style: TextStyle(
                                     color: _brandRed,
-                                    fontSize: 12,
-                                    fontStyle: FontStyle.italic,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
@@ -2403,7 +2403,7 @@ class InvoicePdf {
                   pw.SizedBox(
                     width: 220,
                     child: pw.Text(
-                      'Kantor: ${invoice.companyAddress}\n+62 811-2867-917',
+                      'Kantor: ${invoice.companyAddress}\n0811 2867 917',
                       textAlign: pw.TextAlign.right,
                       style: const pw.TextStyle(fontSize: 8, lineSpacing: 2),
                     ),
@@ -2532,9 +2532,9 @@ class InvoicePdf {
                             pw.Text(
                               'Catatan: ${item.note}',
                               style: pw.TextStyle(
-                                fontSize: 8,
+                                fontSize: 8.5,
                                 color: red,
-                                fontStyle: pw.FontStyle.italic,
+                                fontWeight: pw.FontWeight.bold,
                               ),
                             ),
                         ],
@@ -2683,7 +2683,14 @@ class InvoicePdf {
                       fontWeight: pw.FontWeight.bold,
                     ),
                   ),
-                  pw.Text('Finance', style: const pw.TextStyle(fontSize: 8)),
+                  pw.Text(
+                    'Finance',
+                    style: pw.TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: pw.FontWeight.bold,
+                      color: ink,
+                    ),
+                  ),
                 ],
               ),
             ],
