@@ -2669,10 +2669,6 @@ class InvoicePdf {
                       fontWeight: pw.FontWeight.bold,
                     ),
                   ),
-                  pw.Text(
-                    _dateFormat.format(invoice.issueDate),
-                    style: const pw.TextStyle(fontSize: 7),
-                  ),
                   pw.SizedBox(height: 3),
                   pw.Image(
                     signature,
