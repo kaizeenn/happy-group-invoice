@@ -12,9 +12,20 @@ const roleDefinition = await query("SELECT COLUMN_TYPE AS columnType FROM inform
 if (roleDefinition[0] && !roleDefinition[0].columnType.includes('super_admin')) await query("ALTER TABLE users MODIFY role ENUM('super_admin','admin','user') NOT NULL DEFAULT 'user'");
 
 const addresses = [
+  ['jakarta', 'Kantor Jakarta', 'Kawasan CBD Rasuna Epicentrum, Epiwalk Office Suite Level 5 Unit A501, Jl. H. R. Rasuna Said, RT 02 / RW 05, Karet, Kuningan, Kec. Setia Budi, Jakarta Selatan, Jakarta 12940'],
+  ['bandung', 'Kantor Bandung', 'Jl. A.H. Nasution No. 952, Antapani Wetan, Kec. Antapani, Kota Bandung, Jawa Barat 40291'],
+  ['cirebon', 'Kantor Cirebon', 'Jl. Cisaat - Kramat, Cisaat, Kec. Dukupuntang, Kab. Cirebon, Jawa Barat 45652'],
+  ['purwokerto', 'Kantor Purwokerto', 'Jl. Mayjend Sutoyo, Sawangan, Kedungwuluh, Purwokerto, Jawa Tengah 53137'],
+  ['semarang', 'Kantor Semarang', 'Jl. Genting Baru, Meteseh, Kec. Tembalang, Kota Semarang, Jawa Tengah 50271'],
+  ['solo', 'Kantor Solo', 'Jl. Pesanggrahan Langenharjo, Kec. Grogol, Kabupaten Sukoharjo, Jawa Tengah 57552'],
   ['yogyakarta', 'Kantor Yogyakarta', 'Jl. Imogiri Barat Km 7, Bangunharjo, Kec. Sewon, Kab. Bantul, Yogyakarta 55188'],
-  ['jakarta', 'Kantor Jakarta', 'Kawasan CBD Rasuna Epicentrum, Epiwalk Office Suite Level 5 Unit A501, Jl. H. R. Rasuna Said, Karet, Kuningan, Jakarta Selatan 12940'],
-  ['bandung', 'Kantor Bandung', 'Jl. A.H. Nasution No. 952, Antapani Wetan, Kec. Antapani, Kota Bandung, Jawa Barat 40291']
+  ['surabaya', 'Kantor Surabaya', 'Jl. Laksda M. Natsir No. 1, Perak Barat, Kec. Krembangan, Surabaya, Jawa Timur 60177'],
+  ['malang', 'Kantor Malang', 'Jl. Sekar Putih (Selatan TPU Tawangargo), Kec. Karang Ploso, Malang, Jawa Timur 65152'],
+  ['banyuwangi', 'Kantor Banyuwangi', 'Jl. Ry Sraten, Dusun Krajan, Krajan, Kec. Cluring, Kabupaten Banyuwangi, Jawa Timur 68482'],
+  ['bali', 'Kantor Bali', 'BTN Bumi Dalung Permai Blok V V No 72, Br, Jl. Tegal Sari Raya, Kerobokan Kaja, Kec. Kuta Utara, Kab Badung, Bali 80361'],
+  ['padang', 'Kantor Padang', 'Jln. By Pass KM 15, Aie Pacah, Kecamatan Koto Tangah, Padang, Sumatera Barat 25586'],
+  ['palembang', 'Kantor Palembang', 'Jl HM Noerdin Pandji, Sukajaya, Kec. Sukarami, Kota Palembang, Sumatera Selatan 30961'],
+  ['lampung', 'Kantor Lampung', 'Jl. Zainal Abidin Pagar Alam No. 99 B, Labuhan Ratu, Kec. Kedaton, Kota Bandar Lampung, Lampung 35132']
 ];
 for (const [id, name, fullAddress] of addresses) await query('INSERT IGNORE INTO office_addresses (id, name, full_address) VALUES (?, ?, ?)', [id, name, fullAddress]);
 
