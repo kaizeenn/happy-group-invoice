@@ -31,7 +31,9 @@ const getOverdueDays = (invoice, baseDate = new Date()) => {
   return days > 0 ? days : 0;
 };
 const isOverdue = invoice => getOverdueDays(invoice) > 30;
-const imageToDataUrl = async src => { const response = await fetch(src); const blob = await response.blob(); return new Promise(resolve => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); }); };
+// PNG dengan transparansi di-embed jsPDF tanpa kompresi efektif (bisa >10 MB).
+// Matte putih + JPEG membuat jsPDF menyimpannya sebagai DCTDecode sehingga file kecil.
+const jpegFromPng = (src, maxWidth = 800, quality = .85) => new Promise(resolve => { const img = new Image(); img.onload = () => { const scale = Math.min(1, maxWidth / img.naturalWidth); const canvas = document.createElement('canvas'); canvas.width = Math.round(img.naturalWidth * scale); canvas.height = Math.round(img.naturalHeight * scale); const ctx = canvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', quality)); }; img.src = src; });
 
 class AppErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { failed: false }; }
@@ -203,7 +205,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
     setBusy(true);
     try {
       const [logo, signature, paid] = await Promise.all([
-        imageToDataUrl('/assets/images/happy_group_logo.png'), imageToDataUrl('/assets/images/signature_kiki_stamp.png'), imageToDataUrl('/assets/images/paid_stamp.png')
+        jpegFromPng('/assets/images/happy_group_logo.png', 700), jpegFromPng('/assets/images/signature_kiki_stamp.png', 700), jpegFromPng('/assets/images/paid_stamp.png', 800)
       ]);
       // Layout faithfully mirrors the invoice produced by the mobile application.
       const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -215,7 +217,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       // a multi-line office address from colliding with the telephone or invoice data.
       const companyTextY = 20, companyLineHeight = 3.4, phoneY = companyTextY + companyLines.length * companyLineHeight + 2, headerRuleY = phoneY + 6;
 
-      pdf.addImage(logo, 'PNG', margin, 13, 54, 20);
+      pdf.addImage(logo, 'JPEG', margin, 13, 54, 20);
       pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...ink); pdf.setFontSize(11); pdf.text('PT. HAPPY TRANS HARYADI', 194, 15, { align: 'right' });
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.text(companyLines, 194, companyTextY, { align: 'right', lineHeightFactor: 1.12 });
       pdf.setFontSize(7.5); pdf.text('0811 2867 917', 194, phoneY, { align: 'right' });
@@ -240,7 +242,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       };
       const addContinuationPage = () => {
         pdf.addPage();
-        pdf.addImage(logo, 'PNG', margin, 13, 44, 16);
+        pdf.addImage(logo, 'JPEG', margin, 13, 44, 16);
         pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...ink); pdf.setFontSize(14); pdf.text('INVOICE', 194, 18, { align: 'right' });
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.text(invoice.number, 194, 23, { align: 'right' });
         pdf.setDrawColor(...red); pdf.setLineWidth(1); pdf.line(margin, 31, 194, 31);
@@ -272,10 +274,20 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       }
       const total = totalOf(invoice), paidTotal = paidOf(invoice), due = dueOf(invoice);
       const terms = pdf.splitTextToSize(invoice.terms || '-', 86);
-      const stampHeight = statusOf(invoice) === 'LUNAS' ? 65 : 0;
-      // The closing block must include the signature's complete image, name and role,
-      // not only the totals box. Otherwise it can be clipped at the page bottom.
-      const lowerHeight = Math.max(terms.length * 3.6 + 118 + (invoice.picName ? 22 : 0), 174 + (invoice.picName ? 22 : 0));
+      const hasStamp = statusOf(invoice) === 'LUNAS';
+      const rawBank = (bankAccounts || 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI').split('\n').map(s => s.trim()).filter(Boolean);
+      const bankLines = rawBank.length ? rawBank : ['BCA 846-598-6111', 'MANDIRI 137.004747.1111', 'A/N ARI HARYADI'];
+      const picLines = invoice.picName ? pdf.splitTextToSize(`${invoice.picName} - ${invoice.picPhone || ''}`, 120) : [];
+      // Tinggi blok penutup (terms, ringkasan, rekening, PIC, tanda tangan) dihitung
+      // dari isi aslinya — bukan cadangan tetap 174 mm — supaya invoice yang sebenarnya
+      // muat di satu halaman tidak lagi terdorong ke halaman kedua.
+      const termsEndRel = 12 + terms.length * 3.6;
+      const bankStartRel = Math.max(termsEndRel + 14, 43);
+      const contactsEndRel = bankStartRel + 8 + bankLines.length * 3.4 + (invoice.picName ? 5 + 6 + picLines.length * 3.6 : 0);
+      // Tanda tangan cukup mulai 60 mm di bawah ringkasan agar bebas dari stempel PAID
+      // (stempel berakhir di 65 mm, gambar ttd mulai +7) — bukan 38+65 yang menumpuk ruang kosong.
+      const signatureEndRel = Math.max(termsEndRel + 20, hasStamp ? 60 : 38) + 52;
+      const lowerHeight = 8 + Math.max(contactsEndRel, signatureEndRel);
       // Move the closing section as a unit if the remaining space cannot fit it.
       if (y + lowerHeight > 284) {
         pdf.addPage();
@@ -293,27 +305,25 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       pdf.setFont('helvetica','bold'); pdf.text(money(total),190,summaryY+8,{align:'right'}); pdf.text(money(paidTotal),190,summaryY+14,{align:'right'});
       pdf.line(123,summaryY+19,190,summaryY+19); pdf.setFontSize(10); pdf.text('Amount Due (IDR)',123,summaryY+27);
       pdf.setTextColor(...red); pdf.text(money(due),190,summaryY+27,{align:'right'});
-      if (statusOf(invoice) === 'LUNAS') pdf.addImage(paid, 'PNG', 128, summaryY + 33, 59, 32);
+      if (hasStamp) pdf.addImage(paid, 'JPEG', 128, summaryY + 33, 59, 32);
       const termsEndY = termsY + 10 + terms.length * 3.6;
       const bankY = Math.max(termsEndY + 14, summaryY + 43);
       pdf.setTextColor(...red); pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('BANK ACCOUNT', margin, bankY);
-      const rawBank = (bankAccounts || 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI').split('\n').map(s => s.trim()).filter(Boolean);
-      const bankLines = rawBank.length ? rawBank : ['BCA 846-598-6111', 'MANDIRI 137.004747.1111', 'A/N ARI HARYADI'];
       pdf.setTextColor(...ink); pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.text(bankLines, margin, bankY+8);
       // PIC contacts answer "who should the customer call?" right below the bank block.
       if (invoice.picName) {
         const picY = bankY + 8 + bankLines.length * 3.4 + 5;
         pdf.setTextColor(...red); pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('ADA PERTANYAAN? HUBUNGI', margin, picY);
         pdf.setTextColor(...ink); pdf.setFont('helvetica','normal'); pdf.setFontSize(8);
-        pdf.text(pdf.splitTextToSize(`${invoice.picName} - ${invoice.picPhone || ''}`, 120), margin, picY+6, { lineHeightFactor: 1.25 });
+        pdf.text(picLines, margin, picY+6, { lineHeightFactor: 1.25 });
       }
       // The bank account stays on the left while the signature stays on the right.
       // Start the signature after the terms (with 20 mm breathing room) so it never
       // overlaps the terms, while avoiding an unnecessarily low signature position.
-      const signatureY = Math.max(termsEndY + 20, summaryY + 38 + stampHeight);
+      const signatureY = Math.max(termsEndY + 20, summaryY + (hasStamp ? 60 : 38));
       pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
       pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'});
-      pdf.addImage(signature, 'PNG', 153, signatureY+7, 56, 29);
+      pdf.addImage(signature, 'JPEG', 153, signatureY+7, 56, 29);
       pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('Kiki Saputri',181,signatureY+44,{align:'center'});
       pdf.setFont('helvetica','bold'); pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text('Finance',181,signatureY+49,{align:'center'});
       pdf.save(`${invoice.number}.pdf`);
