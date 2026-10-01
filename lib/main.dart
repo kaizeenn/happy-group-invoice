@@ -2672,8 +2672,8 @@ class InvoicePdf {
                   pw.SizedBox(height: 3),
                   pw.Image(
                     signature,
-                    width: 145,
-                    height: 88,
+                    width: 88,
+                    height: 55,
                     fit: pw.BoxFit.contain,
                   ),
                   pw.Text(
