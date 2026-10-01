@@ -113,6 +113,14 @@ app.post('/api/pics', requireAuth, allow('admin'), async (req, res) => {
   await query('INSERT INTO pics (id, name, phone) VALUES (?, ?, ?)', [pic.id, pic.name, pic.phone]);
   res.status(201).json(pic);
 });
+app.put('/api/pics/:id', requireAuth, allow('admin'), async (req, res) => {
+  const { name, phone } = req.body || {};
+  if (!name || !phone) return res.status(400).json({ message: 'Nama dan nomor telepon PIC wajib diisi.' });
+  const pic = { id: req.params.id, name: String(name).trim(), phone: String(phone).trim() };
+  const result = await query('UPDATE pics SET name = ?, phone = ? WHERE id = ?', [pic.name, pic.phone, pic.id]);
+  if (!result.affectedRows) return res.status(404).json({ message: 'PIC tidak ditemukan atau sudah dihapus.' });
+  res.json(pic);
+});
 app.delete('/api/pics/:id', requireAuth, allow('admin'), async (req, res) => {
   const result = await query('DELETE FROM pics WHERE id = ?', [req.params.id]);
   if (!result.affectedRows) return res.status(404).json({ message: 'PIC tidak ditemukan atau sudah dihapus.' });
