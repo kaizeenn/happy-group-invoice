@@ -36,32 +36,33 @@ async function resolveManageableUser(req, res, next) {
   next();
 }
 const sqlDate = value => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
-const toInvoice = invoice => ({ ...invoice, issueDate: sqlDate(invoice.issue_date), companyAddress: invoice.company_address, customerAddress: invoice.customer_address || '', customerPhone: invoice.customer_phone || '', paymentStatus: invoice.payment_status, picName: invoice.pic_name || '', picPhone: invoice.pic_phone || '', items: [], payments: [] });
+const toInvoice = invoice => ({ ...invoice, issueDate: sqlDate(invoice.issue_date), companyAddress: invoice.company_address, customerCompany: invoice.customer_company || '', customerPhone: invoice.customer_phone || '', paymentStatus: invoice.payment_status, items: [], payments: [] });
 
 async function fetchInvoices() {
   const invoices = (await query(`SELECT i.*, u.name AS created_by_name FROM invoices i JOIN users u ON u.id=i.created_by ORDER BY i.issue_date DESC, i.created_at DESC`)).map(toInvoice);
   if (!invoices.length) return invoices;
   const ids = invoices.map(i => i.id); const placeholders = ids.map(() => '?').join(',');
   const [items, payments] = await Promise.all([
-    query(`SELECT id, invoice_id, description, detail, note, price, quantity, sort_order FROM invoice_items WHERE invoice_id IN (${placeholders}) ORDER BY sort_order`, ids),
+    query(`SELECT id, invoice_id, description, detail, usage_date, note, price, quantity, sort_order FROM invoice_items WHERE invoice_id IN (${placeholders}) ORDER BY sort_order`, ids),
     query(`SELECT id, invoice_id, amount, payment_date, method, account, reference_no, note FROM payments WHERE invoice_id IN (${placeholders}) ORDER BY payment_date`, ids)
   ]);
   const index = new Map(invoices.map(i => [i.id, i]));
-  items.forEach(item => index.get(item.invoice_id).items.push({ id: item.id, description: item.description, detail: item.detail || '', note: item.note || '', price: Number(item.price), quantity: item.quantity }));
+  items.forEach(item => index.get(item.invoice_id).items.push({ id: item.id, description: item.description, detail: item.detail || '', usageDate: item.usage_date ? sqlDate(item.usage_date) : '', note: item.note || '', price: Number(item.price), quantity: item.quantity }));
   payments.forEach(payment => index.get(payment.invoice_id).payments.push({ id: payment.id, amount: Number(payment.amount), date: String(payment.payment_date).slice(0,10), method: payment.method || '', account: payment.account || '', reference: payment.reference_no || '', note: payment.note || '' }));
   return invoices;
 }
 async function writeInvoice(conn, incoming, userId) {
   const invoice = { ...incoming, id: incoming.id || crypto.randomUUID() };
-  const fields = [invoice.number, invoice.issueDate, invoice.companyAddress || '', invoice.customer, invoice.customerAddress || '', invoice.customerPhone || '', invoice.paymentStatus || 'auto', invoice.terms || '', invoice.notes || '', invoice.picName || '', invoice.picPhone || '', userId];
-  // A duplicate invoice number may belong to a previous client-generated UUID.
-  // Resolve that row first, so children always use the actual parent id.
-  const existing = await conn.execute('SELECT id FROM invoices WHERE id = ? OR number = ? LIMIT 1', [invoice.id, invoice.number]);
-  if (existing[0].length) invoice.id = existing[0][0].id;
-  await conn.execute(`INSERT INTO invoices (id, number, issue_date, company_address, customer, customer_address, customer_phone, payment_status, terms, notes, pic_name, pic_phone, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE number=VALUES(number), issue_date=VALUES(issue_date), company_address=VALUES(company_address), customer=VALUES(customer), customer_address=VALUES(customer_address), customer_phone=VALUES(customer_phone), payment_status=VALUES(payment_status), terms=VALUES(terms), notes=VALUES(notes), pic_name=VALUES(pic_name), pic_phone=VALUES(pic_phone)`, [invoice.id, ...fields]);
+  const fields = [invoice.number, invoice.issueDate, invoice.companyAddress || '', invoice.customer, invoice.customerCompany || '', invoice.customerPhone || '', invoice.paymentStatus || 'auto', invoice.terms || '', invoice.notes || '', '', '', userId];
+  const [existing] = await conn.execute('SELECT id FROM invoices WHERE id = ? LIMIT 1', [invoice.id]);
+  if (existing.length) {
+    await conn.execute('UPDATE invoices SET number = ?, issue_date = ?, company_address = ?, customer = ?, customer_company = ?, customer_phone = ?, payment_status = ?, terms = ?, notes = ?, pic_name = ?, pic_phone = ? WHERE id = ?', [...fields.slice(0, -1), invoice.id]);
+  } else {
+    await conn.execute('INSERT INTO invoices (id, number, issue_date, company_address, customer, customer_company, customer_address, customer_phone, payment_status, terms, notes, pic_name, pic_phone, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [invoice.id, ...fields.slice(0, 5), '', ...fields.slice(5)]);
+  }
   await conn.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [invoice.id]);
   await conn.execute('DELETE FROM payments WHERE invoice_id = ?', [invoice.id]);
-  for (const [sort, item] of (invoice.items || []).entries()) await conn.execute('INSERT INTO invoice_items (id, invoice_id, description, detail, note, price, quantity, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [item.id || crypto.randomUUID(), invoice.id, item.description || '', item.detail || '', item.note || '', Number(item.price || 0), Number(item.quantity || 1), sort]);
+  for (const [sort, item] of (invoice.items || []).entries()) await conn.execute('INSERT INTO invoice_items (id, invoice_id, description, detail, usage_date, note, price, quantity, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [item.id || crypto.randomUUID(), invoice.id, item.description || '', item.detail || '', item.usageDate || null, item.note || '', Number(item.price || 0), Number(item.quantity || 1), sort]);
   for (const payment of invoice.payments || []) await conn.execute('INSERT INTO payments (id, invoice_id, amount, payment_date, method, account, reference_no, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [payment.id || crypto.randomUUID(), invoice.id, Number(payment.amount || 0), payment.date, payment.method || '', payment.account || '', payment.reference || '', payment.note || '', userId]);
   return invoice;
 }
@@ -79,7 +80,7 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token: sign(users[0]), user: publicUser(users[0]) });
 });
 app.get('/api/auth/me', requireAuth, async (req, res) => { const users = await query('SELECT * FROM users WHERE id = ?', [req.user.sub]); if (!users.length) return res.status(401).json({ message: 'Pengguna tidak ditemukan.' }); res.json(publicUser(users[0])); });
-app.get('/api/data', requireAuth, async (_, res) => res.json({ addresses: (await query('SELECT id, name, full_address AS fullAddress FROM office_addresses ORDER BY name')), invoices: await fetchInvoices(), pics: (await query('SELECT id, name, phone, created_at AS createdAt FROM pics ORDER BY created_at')), settings: await fetchSettings() }));
+app.get('/api/data', requireAuth, async (_, res) => res.json({ addresses: (await query('SELECT id, name, full_address AS fullAddress FROM office_addresses ORDER BY name')), invoices: await fetchInvoices(), settings: await fetchSettings() }));
 app.get('/api/settings', requireAuth, async (_, res) => res.json(await fetchSettings()));
 app.put('/api/settings', requireAuth, allow('admin'), async (req, res) => {
   const bankAccounts = String(req.body?.bankAccounts || '').trim();
@@ -91,7 +92,7 @@ app.put('/api/data', requireAuth, allow('admin'), async (req, res) => {
   const conn = await pool.getConnection(); try { await conn.beginTransaction(); await conn.execute('DELETE FROM office_addresses'); for (const address of req.body.addresses || []) await conn.execute('INSERT INTO office_addresses (id, name, full_address) VALUES (?, ?, ?)', [address.id || crypto.randomUUID(), address.name, address.fullAddress]); for (const invoice of req.body.invoices || []) await writeInvoice(conn, invoice, req.user.sub); await conn.commit(); res.json({ ok: true }); } catch (error) { await conn.rollback(); throw error; } finally { conn.release(); }
 });
 app.get('/api/invoices', requireAuth, async (_, res) => res.json(await fetchInvoices()));
-app.post('/api/invoices', requireAuth, async (req, res) => { const conn = await pool.getConnection(); try { await conn.beginTransaction(); const invoice = await writeInvoice(conn, req.body, req.user.sub); await conn.commit(); res.status(201).json(invoice); } catch (error) { await conn.rollback(); throw error; } finally { conn.release(); } });
+app.post('/api/invoices', requireAuth, async (req, res) => { const conn = await pool.getConnection(); try { await conn.beginTransaction(); const invoice = await writeInvoice(conn, req.body, req.user.sub); await conn.commit(); res.status(201).json(invoice); } catch (error) { await conn.rollback(); if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Nomor invoice sudah digunakan. Muat ulang data, lalu buat invoice kembali.' }); throw error; } finally { conn.release(); } });
 // Every authenticated staff account may remove an invoice. Invoice items and payments
 // are removed automatically through the database's cascading foreign keys.
 app.delete('/api/invoices/:id', requireAuth, async (req, res) => { const result = await query('DELETE FROM invoices WHERE id = ?', [req.params.id]); if (!result.affectedRows) return res.status(404).json({ message: 'Invoice tidak ditemukan atau sudah dihapus.' }); res.status(204).end(); });
@@ -103,27 +104,6 @@ app.delete('/api/users/:id', requireAuth, allow('admin'), resolveManageableUser,
   const paymentCount = await query('SELECT COUNT(*) AS total FROM payments WHERE created_by = ?', [req.targetUser.id]);
   if (Number(invoiceCount[0].total) || Number(paymentCount[0].total)) return res.status(409).json({ message: `Akun ini tidak dapat dihapus karena memiliki ${invoiceCount[0].total} invoice dan ${paymentCount[0].total} pembayaran tercatat. Hapus invoice terkait terlebih dahulu agar riwayat tetap konsisten.` });
   await query('DELETE FROM users WHERE id = ?', [req.targetUser.id]);
-  res.status(204).end();
-});
-// PIC contacts appear at the bottom of every invoice so customers know whom to call.
-app.post('/api/pics', requireAuth, allow('admin'), async (req, res) => {
-  const { name, phone } = req.body || {};
-  if (!name || !phone) return res.status(400).json({ message: 'Nama dan nomor telepon PIC wajib diisi.' });
-  const pic = { id: crypto.randomUUID(), name: String(name).trim(), phone: String(phone).trim() };
-  await query('INSERT INTO pics (id, name, phone) VALUES (?, ?, ?)', [pic.id, pic.name, pic.phone]);
-  res.status(201).json(pic);
-});
-app.put('/api/pics/:id', requireAuth, allow('admin'), async (req, res) => {
-  const { name, phone } = req.body || {};
-  if (!name || !phone) return res.status(400).json({ message: 'Nama dan nomor telepon PIC wajib diisi.' });
-  const pic = { id: req.params.id, name: String(name).trim(), phone: String(phone).trim() };
-  const result = await query('UPDATE pics SET name = ?, phone = ? WHERE id = ?', [pic.name, pic.phone, pic.id]);
-  if (!result.affectedRows) return res.status(404).json({ message: 'PIC tidak ditemukan atau sudah dihapus.' });
-  res.json(pic);
-});
-app.delete('/api/pics/:id', requireAuth, allow('admin'), async (req, res) => {
-  const result = await query('DELETE FROM pics WHERE id = ?', [req.params.id]);
-  if (!result.affectedRows) return res.status(404).json({ message: 'PIC tidak ditemukan atau sudah dihapus.' });
   res.status(204).end();
 });
 app.use((error, _, res, __) => { console.error(error); res.status(500).json({ message: 'Terjadi kesalahan pada server.' }); });
