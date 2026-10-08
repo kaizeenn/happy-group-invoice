@@ -44,6 +44,18 @@ const _vehicleTypes = <String>[
   'Truck CDE',
   'Truck CDE BOX',
 ];
+const _unitPresets = <String>[
+  'Unit',
+  'Hari',
+  'Trip',
+  'Rit',
+  'Orang',
+  'Seat',
+  'Paket',
+  'Bulan',
+  'Jam',
+  'Ton',
+];
 final _rupiah = NumberFormat.currency(
   locale: 'id_ID',
   symbol: 'Rp',
@@ -131,12 +143,17 @@ class InvoiceItem {
     required this.quantity,
     this.detail = '',
     this.note = '',
+    this.unit = 'Unit',
   });
   String description;
   double price;
   double quantity;
   String detail;
   String note;
+
+  /// Satuan bebas per item (mis. Unit, Hari, Trip). Default "Unit".
+  String unit;
+  String get unitLabel => unit.trim().isEmpty ? 'Unit' : unit.trim();
   double get total => price * quantity;
   Map<String, dynamic> toJson() => {
     'description': description,
@@ -144,6 +161,7 @@ class InvoiceItem {
     'quantity': quantity,
     'detail': detail,
     'note': note,
+    'unit': unit,
   };
   factory InvoiceItem.fromJson(Map<String, dynamic> json) => InvoiceItem(
     description: json['description'] as String? ?? '',
@@ -151,6 +169,9 @@ class InvoiceItem {
     quantity: (json['quantity'] as num?)?.toDouble() ?? 1,
     detail: json['detail'] as String? ?? '',
     note: json['note'] as String? ?? '',
+    unit: (json['unit'] as String?)?.trim().isNotEmpty == true
+        ? json['unit'] as String
+        : 'Unit',
   );
 }
 
@@ -1558,7 +1579,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             style: const TextStyle(fontWeight: FontWeight.w800),
           ),
           subtitle: Text(
-            '${entry.value.quantity.toStringAsFixed(entry.value.quantity % 1 == 0 ? 0 : 2)} unit × ${_rupiah.format(entry.value.price)}${entry.value.detail.isEmpty ? '' : '\n${entry.value.detail}'}${entry.value.note.isEmpty ? '' : '\nCatatan: ${entry.value.note}'}',
+            '${entry.value.quantity.toStringAsFixed(entry.value.quantity % 1 == 0 ? 0 : 2)} ${entry.value.unitLabel} × ${_rupiah.format(entry.value.price)}${entry.value.detail.isEmpty ? '' : '\n${entry.value.detail}'}${entry.value.note.isEmpty ? '' : '\nCatatan: ${entry.value.note}'}',
           ),
           isThreeLine:
               entry.value.detail.isNotEmpty || entry.value.note.isNotEmpty,
@@ -1668,6 +1689,7 @@ class _ItemEditorSheetState extends State<ItemEditorSheet> {
   final _form = GlobalKey<FormState>();
   late String _type;
   late final TextEditingController _price, _quantity, _detail, _note;
+  late String _unit;
   @override
   void initState() {
     super.initState();
@@ -1686,6 +1708,7 @@ class _ItemEditorSheetState extends State<ItemEditorSheet> {
     );
     _detail = TextEditingController(text: widget.item.detail);
     _note = TextEditingController(text: widget.item.note);
+    _unit = widget.item.unitLabel;
   }
 
   @override
@@ -1695,6 +1718,37 @@ class _ItemEditorSheetState extends State<ItemEditorSheet> {
     _detail.dispose();
     _note.dispose();
     super.dispose();
+  }
+
+  Future<String?> _askCustomUnit() {
+    final controller = TextEditingController(text: _unit);
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Satuan custom'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Nama satuan',
+            hintText: 'Contoh: Hari, Trip, Rit, Orang',
+          ),
+          onSubmitted: (value) =>
+              Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('BATAL'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('PAKAI'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1773,6 +1827,40 @@ class _ItemEditorSheetState extends State<ItemEditorSheet> {
                 ],
               ),
               const SizedBox(height: 12),
+              Text('Satuan',
+                  style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ..._unitPresets.map(
+                    (preset) => ChoiceChip(
+                      label: Text(preset),
+                      selected: _unit == preset,
+                      onSelected: (_) => setState(() => _unit = preset),
+                    ),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.edit_rounded, size: 16),
+                    label: const Text('Satuan lain…'),
+                    onPressed: () async {
+                      final custom = await _askCustomUnit();
+                      if (custom != null && custom.isNotEmpty) {
+                        setState(() => _unit = custom);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              if (!_unitPresets.contains(_unit))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text('Satuan dipakai: $_unit',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, color: _brandRed)),
+                ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _detail,
                 minLines: 3,
@@ -1811,6 +1899,7 @@ class _ItemEditorSheetState extends State<ItemEditorSheet> {
                         ),
                         detail: _detail.text.trim(),
                         note: _note.text.trim(),
+                        unit: _unit.trim().isEmpty ? 'Unit' : _unit.trim(),
                       ),
                     );
                   },
@@ -2189,7 +2278,7 @@ class _InvoiceDetailState extends State<InvoiceDetail> {
                         ),
                       ),
                       Text(
-                        '${_rupiah.format(e.total)}\n${e.quantity} × ${_rupiah.format(e.price)}',
+                        '${_rupiah.format(e.total)}\n${e.quantity} ${e.unitLabel} × ${_rupiah.format(e.price)}',
                         textAlign: TextAlign.right,
                         style: const TextStyle(fontSize: 12),
                       ),
@@ -2542,9 +2631,7 @@ class InvoicePdf {
                     ),
                     _pdfCell(_rupiah.format(item.price)),
                     _pdfCell(
-                      item.quantity.toStringAsFixed(
-                        item.quantity % 1 == 0 ? 0 : 2,
-                      ),
+                      '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 2)} ${item.unitLabel}',
                     ),
                     _pdfCell(_rupiah.format(item.total)),
                   ],

@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   note TEXT NULL,
   price DECIMAL(16,2) NOT NULL DEFAULT 0,
   quantity INT NOT NULL DEFAULT 1,
+  unit VARCHAR(40) NULL DEFAULT 'Unit',
   sort_order INT NOT NULL DEFAULT 0,
   CONSTRAINT fk_item_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

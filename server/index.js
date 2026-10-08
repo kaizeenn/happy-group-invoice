@@ -43,11 +43,11 @@ async function fetchInvoices() {
   if (!invoices.length) return invoices;
   const ids = invoices.map(i => i.id); const placeholders = ids.map(() => '?').join(',');
   const [items, payments] = await Promise.all([
-    query(`SELECT id, invoice_id, description, detail, usage_date, note, price, quantity, sort_order FROM invoice_items WHERE invoice_id IN (${placeholders}) ORDER BY sort_order`, ids),
+    query(`SELECT id, invoice_id, description, detail, usage_date, note, price, quantity, unit, sort_order FROM invoice_items WHERE invoice_id IN (${placeholders}) ORDER BY sort_order`, ids),
     query(`SELECT id, invoice_id, amount, payment_date, method, account, reference_no, note FROM payments WHERE invoice_id IN (${placeholders}) ORDER BY payment_date`, ids)
   ]);
   const index = new Map(invoices.map(i => [i.id, i]));
-  items.forEach(item => index.get(item.invoice_id).items.push({ id: item.id, description: item.description, detail: item.detail || '', usageDate: item.usage_date ? sqlDate(item.usage_date) : '', note: item.note || '', price: Number(item.price), quantity: item.quantity }));
+  items.forEach(item => index.get(item.invoice_id).items.push({ id: item.id, description: item.description, detail: item.detail || '', usageDate: item.usage_date ? sqlDate(item.usage_date) : '', note: item.note || '', price: Number(item.price), quantity: item.quantity, unit: item.unit || 'Unit' }));
   payments.forEach(payment => index.get(payment.invoice_id).payments.push({ id: payment.id, amount: Number(payment.amount), date: String(payment.payment_date).slice(0,10), method: payment.method || '', account: payment.account || '', reference: payment.reference_no || '', note: payment.note || '' }));
   return invoices;
 }
@@ -62,7 +62,7 @@ async function writeInvoice(conn, incoming, userId) {
   }
   await conn.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [invoice.id]);
   await conn.execute('DELETE FROM payments WHERE invoice_id = ?', [invoice.id]);
-  for (const [sort, item] of (invoice.items || []).entries()) await conn.execute('INSERT INTO invoice_items (id, invoice_id, description, detail, usage_date, note, price, quantity, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [item.id || crypto.randomUUID(), invoice.id, item.description || '', item.detail || '', item.usageDate || null, item.note || '', Number(item.price || 0), Number(item.quantity || 1), sort]);
+  for (const [sort, item] of (invoice.items || []).entries()) await conn.execute('INSERT INTO invoice_items (id, invoice_id, description, detail, usage_date, note, price, quantity, unit, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [item.id || crypto.randomUUID(), invoice.id, item.description || '', item.detail || '', item.usageDate || null, item.note || '', Number(item.price || 0), Number(item.quantity || 1), String(item.unit || 'Unit').slice(0, 40), sort]);
   for (const payment of invoice.payments || []) await conn.execute('INSERT INTO payments (id, invoice_id, amount, payment_date, method, account, reference_no, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [payment.id || crypto.randomUUID(), invoice.id, Number(payment.amount || 0), payment.date, payment.method || '', payment.account || '', payment.reference || '', payment.note || '', userId]);
   return invoice;
 }

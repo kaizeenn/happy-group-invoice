@@ -11,6 +11,14 @@ for (const statement of sql.split(/;\s*(?:\r?\n|$)/).map(s => s.trim()).filter(B
 const roleDefinition = await query("SELECT COLUMN_TYPE AS columnType FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'role'");
 if (roleDefinition[0] && !roleDefinition[0].columnType.includes('super_admin')) await query("ALTER TABLE users MODIFY role ENUM('super_admin','admin','user') NOT NULL DEFAULT 'user'");
 
+// Satuan / custom unit per item invoice. Kolom ditambahkan belakangan, jadi
+// database produksi yang sudah ada perlu ALTER eksplisit.
+const unitColumn = await query("SELECT COLUMN_NAME AS columnName FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'invoice_items' AND column_name = 'unit'");
+if (!unitColumn.length) {
+  await query("ALTER TABLE invoice_items ADD COLUMN unit VARCHAR(40) NULL DEFAULT 'Unit' AFTER quantity");
+  console.log('Added invoice_items.unit column.');
+}
+
 const addresses = [
   ['jakarta', 'Kantor Jakarta', 'Kawasan CBD Rasuna Epicentrum, Epiwalk Office Suite Level 5 Unit A501, Jl. H. R. Rasuna Said, RT 02 / RW 05, Karet, Kuningan, Kec. Setia Budi, Jakarta Selatan, Jakarta 12940'],
   ['bandung', 'Kantor Bandung', 'Jl. A.H. Nasution No. 952, Antapani Wetan, Kec. Antapani, Kota Bandung, Jawa Barat 40291'],
