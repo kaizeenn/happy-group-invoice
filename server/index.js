@@ -35,7 +35,13 @@ async function resolveManageableUser(req, res, next) {
   req.targetUser = target;
   next();
 }
-const sqlDate = value => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+const sqlDate = value => {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const text = String(value ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+};
 const toInvoice = invoice => ({ ...invoice, issueDate: sqlDate(invoice.issue_date), companyAddress: invoice.company_address, customerCompany: invoice.customer_company || '', customerPhone: invoice.customer_phone || '', paymentStatus: invoice.payment_status, items: [], payments: [] });
 
 async function fetchInvoices() {
@@ -48,7 +54,7 @@ async function fetchInvoices() {
   ]);
   const index = new Map(invoices.map(i => [i.id, i]));
   items.forEach(item => index.get(item.invoice_id).items.push({ id: item.id, description: item.description, detail: item.detail || '', usageDate: item.usage_date ? sqlDate(item.usage_date) : '', note: item.note || '', price: Number(item.price), quantity: item.quantity, unit: item.unit || 'Unit' }));
-  payments.forEach(payment => index.get(payment.invoice_id).payments.push({ id: payment.id, amount: Number(payment.amount), date: String(payment.payment_date).slice(0,10), method: payment.method || '', account: payment.account || '', reference: payment.reference_no || '', note: payment.note || '' }));
+  payments.forEach(payment => index.get(payment.invoice_id).payments.push({ id: payment.id, amount: Number(payment.amount), date: sqlDate(payment.payment_date), method: payment.method || '', account: payment.account || '', reference: payment.reference_no || '', note: payment.note || '' }));
   return invoices;
 }
 async function writeInvoice(conn, incoming, userId) {
@@ -63,8 +69,11 @@ async function writeInvoice(conn, incoming, userId) {
   await conn.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [invoice.id]);
   await conn.execute('DELETE FROM payments WHERE invoice_id = ?', [invoice.id]);
   for (const [sort, item] of (invoice.items || []).entries()) await conn.execute('INSERT INTO invoice_items (id, invoice_id, description, detail, usage_date, note, price, quantity, unit, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [item.id || crypto.randomUUID(), invoice.id, item.description || '', item.detail || '', item.usageDate || null, item.note || '', Number(item.price || 0), Number(item.quantity || 1), String(item.unit || 'Unit').slice(0, 40), sort]);
-  for (const payment of invoice.payments || []) await conn.execute('INSERT INTO payments (id, invoice_id, amount, payment_date, method, account, reference_no, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [payment.id || crypto.randomUUID(), invoice.id, Number(payment.amount || 0), payment.date, payment.method || '', payment.account || '', payment.reference || '', payment.note || '', userId]);
-  return invoice;
+  for (const payment of invoice.payments || []) {
+    const paymentDate = sqlDate(payment.date) || new Date().toISOString().slice(0, 10);
+    await conn.execute('INSERT INTO payments (id, invoice_id, amount, payment_date, method, account, reference_no, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [payment.id || crypto.randomUUID(), invoice.id, Number(payment.amount || 0), paymentDate, payment.method || '', payment.account || '', payment.reference || '', payment.note || '', userId]);
+  }
+  return { ...invoice, payments: (invoice.payments || []).map(payment => ({ ...payment, date: sqlDate(payment.date) || new Date().toISOString().slice(0, 10) })) };
 }
 
 async function fetchSettings() {
