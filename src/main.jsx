@@ -228,10 +228,58 @@ function PaymentModal({ invoice, onClose, onSave }) {
   return <Modal><form onSubmit={submit}><div className="modal-header"><div><p className="eyebrow">CATAT PEMBAYARAN</p><h2>{invoice.number}</h2></div><button type="button" className="close" onClick={onClose}><X/></button></div><p className="payment-help">Sisa tagihan saat ini: <b>{IDR.format(dueOf(invoice))}</b></p><label>Nominal pembayaran<input className="money" autoFocus value={amount ? Number(String(amount).replaceAll(/\D/g, '')).toLocaleString('id-ID') : ''} onChange={event => setAmount(event.target.value.replaceAll(/\D/g, ''))} placeholder="0"/></label><div className="modal-footer"><span>Pembayaran akan langsung tercatat pada invoice ini.</span><button className="primary" type="submit"><WalletCards size={18}/> Simpan pembayaran</button></div></form></Modal>;
 }
 
+const previewWrapCount = (value, maxChars) => String(value || '-').split('\n').reduce((total, line) => total + Math.max(1, Math.ceil(line.length / maxChars)), 0);
+const previewPdfItemHeight = item => {
+  const titleLines = previewWrapCount(item.description, 52);
+  const detailLines = item.detail ? previewWrapCount(item.detail, 62) : 0;
+  const noteLines = item.note ? previewWrapCount(item.note, 62) : 0;
+  return Math.max(14, 5 + (titleLines + detailLines + noteLines) * 4);
+};
+// Keep the visual preview paginated with the same row budget used by exportPdf.
+// This makes long invoices read as A4 sheets instead of one stretched canvas and
+// keeps the closing/signature block on the final sheet only.
+const buildPreviewPages = (invoice, bankAccounts) => {
+  const addressLines = previewWrapCount(`Kantor: ${invoice.companyAddress || '-'}`, 48);
+  const headerRuleY = 20 + addressLines * 3.4 + 2 + 6;
+  const pages = [];
+  let pageItems = [];
+  let y = headerRuleY + 48;
+  for (const item of invoice.items) {
+    const rowHeight = previewPdfItemHeight(item);
+    if (pageItems.length && y + rowHeight > 197) {
+      pages.push({ items: pageItems, continuation: pages.length > 0 });
+      pageItems = [];
+      y = 48;
+    }
+    pageItems.push(item);
+    y += rowHeight;
+  }
+  if (pageItems.length || !pages.length) pages.push({ items: pageItems, continuation: pages.length > 0 });
+
+  const termsLines = previewWrapCount(invoice.terms || '-', 52);
+  const bankLines = String(bankAccounts || 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI').split('\n').map(line => line.trim()).filter(Boolean);
+  const termsEndRel = 12 + termsLines * 3.6;
+  const contactsEndRel = termsEndRel + 8 + 8 + bankLines.length * 3.4;
+  const signatureOffset = Math.max(32 + termsLines * 3.6, statusOf(invoice) === 'LUNAS' ? 70 : 38);
+  const lowerHeight = 8 + Math.max(contactsEndRel, signatureOffset + 62);
+  if (y + lowerHeight > 284) pages.push({ items: [], continuation: true, closing: true });
+  else pages[pages.length - 1].closing = true;
+  return pages;
+};
+
+function InvoicePreviewPage({ invoice, bankAccounts, items, continuation, closing, showSignature }) {
+  return <div className={`pdf-paper mobile-invoice ${continuation ? 'preview-continuation' : ''}`}>
+    {continuation ? <div className="preview-continuation-top"><img src="/assets/images/happy_group_logo.png"/><div><b>INVOICE</b><span>{invoice.number}</span></div></div> : <><div className="pdf-top"><img src="/assets/images/happy_group_logo.png"/><div className="pdf-company"><b>PT. HAPPY TRANS HARYADI</b><p>Kantor: {invoice.companyAddress}</p><p>0811 2867 917</p></div></div><div className="pdf-rule"/><div className="mobile-bill"><div><span>BILL TO</span><b>{invoice.customer || '-'}</b>{invoice.customerCompany && <p>{invoice.customerCompany}</p>}{invoice.customerPhone && <p>{invoice.customerPhone}</p>}</div><div className="invoice-meta"><h1>INVOICE</h1><p>Invoice #: <b>{invoice.number}</b></p><p>Tanggal: <b>{dateId.format(new Date(`${invoice.issueDate}T00:00:00`))}</b></p></div></div></>}
+    {items.length > 0 && <div className="pdf-table"><div className="pdf-table-head"><span style={{textAlign: 'center'}}>ITEMS / DESKRIPSI</span><span>HARGA</span><span>QTY</span><span>TOTAL</span></div>{items.map(item => <div className="pdf-table-row" key={item.id}><div><b>{item.description}</b>{item.detail && <p>{item.detail}</p>}{item.note && <p>{item.note}</p>}</div><span>{IDR.format(Number(item.price || 0))}</span><span>{item.quantity} {unitOf(item)}</span><b>{IDR.format(Number(item.price || 0) * Number(item.quantity || 0))}</b></div>)}</div>}
+    {closing && <><div className="pdf-bottom"><div className="pdf-terms"><span>TERMS</span><p>{invoice.terms}</p></div><div className="pdf-summary"><div><span>Total</span><b>{IDR.format(totalOf(invoice))}</b></div><div><span>Paid</span><b>{IDR.format(paidOf(invoice))}</b></div><div className="due"><span>Amount Due (IDR)</span><b>{IDR.format(dueOf(invoice))}</b></div>{statusOf(invoice) === 'LUNAS' && <img className="paid-stamp" src="/assets/images/paid_stamp.png"/>}</div></div><div className="mobile-lower"><div className="pdf-bank"><span>BANK ACCOUNT</span><p>{(bankAccounts || 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI').split('\n').map((line, i) => <React.Fragment key={i}>{line}<br/></React.Fragment>)}</p></div><div className="pdf-sign"><div><span>Hormat kami,</span><b>PT. HAPPY TRANS HARYADI</b><img className={showSignature ? '' : 'signature-hidden'} src="/assets/images/signature_kiki_stamp.png"/><b>Kiki Saputri</b><small>Finance</small></div></div></div></>}
+  </div>;
+}
+
 function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
   const [busy, setBusy] = useState(false);
   const [showSignature, setShowSignature] = useState(true);
   const previewPaperRef = useRef(null);
+  const previewPages = useMemo(() => buildPreviewPages(invoice, bankAccounts), [invoice, bankAccounts]);
   const canAddPayment = dueOf(invoice) > 0;
   useEffect(() => { const closeOnEscape = event => event.key === 'Escape' && onClose(); window.addEventListener('keydown', closeOnEscape); return () => window.removeEventListener('keydown', closeOnEscape); }, [onClose]);
   // Vector/text PDF export: all invoice text is drawn with jsPDF.text().
@@ -440,7 +488,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       setBusy(false);
     }
   };
-  return <Modal wide className="invoice-preview-modal"><div className="modal-header preview-header"><div><p className="eyebrow">PRATINJAU INVOICE</p><h2>{invoice.number}</h2></div><div className="preview-actions"><button className="secondary" onClick={onEdit}><Pencil size={16}/> Edit invoice</button><button className={`secondary signature-toggle ${showSignature ? 'is-on' : 'is-off'}`} onClick={() => setShowSignature(value => !value)} title={showSignature ? 'Matikan tanda tangan digital; ruang tetap disediakan' : 'Tampilkan tanda tangan digital'}><Pencil size={16}/>{showSignature ? 'TTD aktif' : 'TTD dimatikan'}</button><button className="primary compact" onClick={onAddPayment} disabled={!canAddPayment} title={canAddPayment ? 'Catat pembayaran baru' : 'Invoice sudah lunas'}><WalletCards size={16}/>{canAddPayment ? 'Tambah pembayaran' : 'Sudah lunas'}</button><button className="close" onClick={onClose} title="Tutup pratinjau"><X/></button></div></div><div className="preview-sheet-frame"><div ref={previewPaperRef} className="pdf-paper mobile-invoice"><div className="pdf-top"><img src="/assets/images/happy_group_logo.png"/><div className="pdf-company"><b>PT. HAPPY TRANS HARYADI</b><p>Kantor: {invoice.companyAddress}</p><p>0811 2867 917</p></div></div><div className="pdf-rule"/><div className="mobile-bill"><div><span>BILL TO</span><b>{invoice.customer || '-'}</b><>{invoice.customerCompany && <p>{invoice.customerCompany}</p>}{invoice.customerPhone && <p>{invoice.customerPhone}</p>}</></div><div className="invoice-meta"><h1>INVOICE</h1><p>Invoice #: <b>{invoice.number}</b></p><p>Tanggal: <b>{dateId.format(new Date(`${invoice.issueDate}T00:00:00`))}</b></p></div></div><div className="pdf-table"><div className="pdf-table-head"><span style={{textAlign: 'center'}}>ITEMS / DESKRIPSI</span><span>HARGA</span><span>QTY</span><span>TOTAL</span></div>{invoice.items.map(item => <div className="pdf-table-row" key={item.id}><div><b>{item.description}</b>{item.detail && <p>{item.detail}</p>}{item.note && <p>{item.note}</p>}</div><span>{IDR.format(Number(item.price || 0))}</span><span>{item.quantity} {unitOf(item)}</span><b>{IDR.format(Number(item.price || 0) * Number(item.quantity || 0))}</b></div>)}</div><div className="pdf-bottom"><div className="pdf-terms"><span>TERMS</span><p>{invoice.terms}</p></div><div className="pdf-summary"><div><span>Total</span><b>{IDR.format(totalOf(invoice))}</b></div><div><span>Paid</span><b>{IDR.format(paidOf(invoice))}</b></div><div className="due"><span>Amount Due (IDR)</span><b>{IDR.format(dueOf(invoice))}</b></div>{statusOf(invoice) === 'LUNAS' && <img className="paid-stamp" src="/assets/images/paid_stamp.png"/>}</div></div><div className="mobile-lower"><div className="pdf-bank"><span>BANK ACCOUNT</span><p>{(bankAccounts || 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI').split('\n').map((line, i) => <React.Fragment key={i}>{line}<br/></React.Fragment>)}</p></div><div className="pdf-sign"><div><span>Hormat kami,</span><b>PT. HAPPY TRANS HARYADI</b><img className={showSignature ? '' : 'signature-hidden'} src="/assets/images/signature_kiki_stamp.png"/><b>Kiki Saputri</b><small>Finance</small></div></div></div></div></div><div className="modal-footer"><span>{showSignature ? 'Tanda tangan digital aktif.' : 'Tanda tangan dimatikan; ruang hardfile tetap disediakan.'}</span><button className="primary" onClick={exportPdf} disabled={busy}><Download size={18}/>{busy ? 'Menyiapkan PDF…' : 'Unduh PDF'}</button></div></Modal>;
+  return <Modal wide className="invoice-preview-modal"><div className="modal-header preview-header"><div><p className="eyebrow">PRATINJAU INVOICE</p><h2>{invoice.number}</h2><p className="modal-subtitle">{previewPages.length} lembar A4 · {invoice.items.length} item</p></div><div className="preview-actions"><button className="secondary" onClick={onEdit}><Pencil size={16}/> Edit invoice</button><button className={`secondary signature-toggle ${showSignature ? 'is-on' : 'is-off'}`} onClick={() => setShowSignature(value => !value)} title={showSignature ? 'Matikan tanda tangan digital; ruang tetap disediakan' : 'Tampilkan tanda tangan digital'}><Pencil size={16}/>{showSignature ? 'TTD aktif' : 'TTD dimatikan'}</button><button className="primary compact" onClick={onAddPayment} disabled={!canAddPayment} title={canAddPayment ? 'Catat pembayaran baru' : 'Invoice sudah lunas'}><WalletCards size={16}/>{canAddPayment ? 'Tambah pembayaran' : 'Sudah lunas'}</button><button className="close" onClick={onClose} title="Tutup pratinjau"><X/></button></div></div><div ref={previewPaperRef} className="preview-sheet-frame">{previewPages.map((page, index) => <InvoicePreviewPage key={index} invoice={invoice} bankAccounts={bankAccounts} items={page.items} continuation={page.continuation} closing={page.closing} showSignature={showSignature}/>)}</div><div className="modal-footer"><span>{showSignature ? 'Tanda tangan digital aktif.' : 'Tanda tangan dimatikan; ruang hardfile tetap disediakan.'}</span><button className="primary" onClick={exportPdf} disabled={busy}><Download size={18}/>{busy ? 'Menyiapkan PDF…' : 'Unduh PDF'}</button></div></Modal>;
 }
 function FormGroup({ title, children, className = '' }) { return <section className={`form-group ${className}`}><h3>{title}</h3>{children}</section> }
 function AddressSettings({ addresses, onClose, onSave }) { const [list, setList] = useState(structuredClone(addresses)); const add = () => setList([...list, { id: uid(), name: '', fullAddress: '' }]); const edit = (i, key, value) => setList(list.map((x, n) => n === i ? { ...x, [key]: value } : x)); return <Modal><div className="modal-header"><div><p className="eyebrow">PERUSAHAAN</p><h2>Data alamat kantor</h2></div><button className="close" onClick={onClose}><X/></button></div>{list.map((address, index) => <div className="address-edit" key={address.id}><input placeholder="Nama kantor" value={address.name} onChange={e => edit(index, 'name', e.target.value)}/><textarea placeholder="Alamat lengkap" value={address.fullAddress} onChange={e => edit(index, 'fullAddress', e.target.value)}/><button className="icon-danger" onClick={() => setList(list.filter((_, i) => i !== index))}><Trash2 size={17}/></button></div>)}<button className="add-line" onClick={add}><Plus size={16}/> Tambah alamat</button><div className="modal-footer"><span>{list.length} alamat tersimpan</span><button className="primary" onClick={() => onSave(list.filter(x => x.name.trim() && x.fullAddress.trim()).map(x => ({ ...x, name: x.name.trim(), fullAddress: x.fullAddress.trim() }))) }><CheckCircle2 size={18}/> Simpan alamat</button></div></Modal> }
