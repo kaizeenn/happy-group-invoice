@@ -255,7 +255,8 @@ const buildPreviewPages = (invoice, bankAccounts) => {
     y += rowHeight;
   }
   if (pageItems.length || !pages.length) pages.push({ items: pageItems, continuation: pages.length > 0 });
-
+  // The export moves the closing block to a fresh continuation page when the
+  // final table page cannot fit it. Keep the same extra blank-data sheet here.
   const termsLines = previewWrapCount(invoice.terms || '-', 52);
   const bankLines = String(bankAccounts || 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI').split('\n').map(line => line.trim()).filter(Boolean);
   const termsEndRel = 12 + termsLines * 3.6;
