@@ -288,6 +288,23 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
   const [showSignature, setShowSignature] = useState(true);
   const previewPaperRef = useRef(null);
   const previewPages = useMemo(() => buildPreviewPages(invoice, bankAccounts), [invoice, bankAccounts]);
+  useEffect(() => {
+    const frame = previewPaperRef.current;
+    if (!frame) return;
+    const updatePreviewScale = () => {
+      const a4WidthPx = 210 * 96 / 25.4;
+      const availableWidth = Math.max(1, frame.clientWidth - 14);
+      const scale = Math.min(1, availableWidth / a4WidthPx);
+      frame.querySelectorAll(':scope > .pdf-paper').forEach(paper => {
+        paper.style.setProperty('--preview-scale', String(scale));
+      });
+    };
+    updatePreviewScale();
+    const observer = new ResizeObserver(updatePreviewScale);
+    observer.observe(frame);
+    window.addEventListener('resize', updatePreviewScale);
+    return () => { observer.disconnect(); window.removeEventListener('resize', updatePreviewScale); };
+  }, [previewPages.length]);
   const canAddPayment = dueOf(invoice) > 0;
   useEffect(() => { const closeOnEscape = event => event.key === 'Escape' && onClose(); window.addEventListener('keydown', closeOnEscape); return () => window.removeEventListener('keydown', closeOnEscape); }, [onClose]);
   // Export through the exact DOM/CSS used by the preview. The browser print
