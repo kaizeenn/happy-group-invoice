@@ -307,7 +307,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const frameDocument = printFrame.contentDocument;
       const styles = [...document.querySelectorAll('link[rel="stylesheet"], style')]
         .map(node => node.outerHTML).join('');
-      const printTitle = String(invoice.number || 'invoice').replace(/[^a-zA-Z0-9._-]+/g, '-');
+      const invoiceFilePart = String(invoice.number || 'invoice').replace(/[^a-zA-Z0-9._-]+/g, '-');
+      const printTitle = `Happy Group Invoice - ${invoiceFilePart}`;
       frameDocument.open();
       frameDocument.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1200"><title>${printTitle}</title>${styles}<style>
         @page{size:A4;margin:0}
