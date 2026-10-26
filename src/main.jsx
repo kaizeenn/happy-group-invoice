@@ -290,8 +290,10 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
   // engine creates selectable text and keeps every spacing decision identical.
   const exportPdf = async () => {
     setBusy(true);
+    const previousDocumentTitle = document.title;
     const cleanup = () => {
       document.body.classList.remove('invoice-printing');
+      document.title = previousDocumentTitle;
       window.removeEventListener('afterprint', cleanup);
       setBusy(false);
     };
@@ -309,6 +311,9 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
         .map(node => node.outerHTML).join('');
       const invoiceFilePart = String(invoice.number || 'invoice').replace(/[^a-zA-Z0-9._-]+/g, '-');
       const printTitle = `Happy Group Invoice - ${invoiceFilePart}`;
+      // Chrome/Safari mobile and macOS may use the top-level document title,
+      // rather than the print iframe title, as the suggested PDF filename.
+      document.title = printTitle;
       frameDocument.open();
       frameDocument.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1200"><title>${printTitle}</title>${styles}<style>
         @page{size:A4;margin:0}
