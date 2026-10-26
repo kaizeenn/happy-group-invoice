@@ -475,12 +475,11 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const termsEndRel = 12 + terms.length * 3.6;
       const bankStartRel = termsEndRel + 8;
       const contactsEndRel = bankStartRel + 8 + bankLines.length * 3.4;
-      // Tanda tangan cukup mulai 60 mm di bawah ringkasan agar bebas dari stempel PAID
-      // (stempel berakhir di 65 mm, gambar ttd mulai +7) — bukan 38+65 yang menumpuk ruang kosong.
-      // Samsung Internet uses this direct vector renderer. Keep its TTD lower,
-      // matching the preview's payment-summary + paid-slot spacing instead of
-      // placing the signature immediately under the payment box.
-      const signatureGap = hasStamp ? 78 : 44;
+      // Reserve one fixed PAID slot for both paid and unpaid invoices, just
+      // like the preview. The signature starts after that slot; it must not
+      // jump higher/lower depending on whether the stamp image is visible.
+      const paidSlotHeight = 24;
+      const signatureGap = 30 + paidSlotHeight;
       const signatureOffset = Math.max(28 + terms.length * 3.6, signatureGap);
       const signatureEndRel = signatureOffset + 52;
       const lowerHeight = 8 + Math.max(contactsEndRel, signatureEndRel);
@@ -505,8 +504,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       pdf.setFont('helvetica','bold'); pdf.text(money(total),190,summaryY+8,{align:'right'}); pdf.text(money(paidTotal),190,summaryY+14,{align:'right'});
       pdf.line(123,summaryY+19,190,summaryY+19); pdf.setFontSize(10); pdf.text('Amount Due (IDR)',123,summaryY+27);
       pdf.setTextColor(...red); pdf.text(money(due),190,summaryY+27,{align:'right'});
-      // Center the compact PAID mark in the payment column so it stays
-      // symmetrical without creating a large gap before the closing row.
+      // The stamp occupies the same reserved slot as an unpaid invoice.
+      // Its visible artwork stays inside the slot and the TTD starts below it.
       if (hasStamp) pdf.addImage(paid, 'JPEG', 134, summaryY + 31, 45, 17);
       const termsEndY = termsY + 10 + terms.length * 3.6;
       // The preview pushes BANK ACCOUNT and the signature block to the bottom
@@ -525,7 +524,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       // The bank account stays on the left while the signature stays on the right.
       // When the image is disabled, the same 40x28 mm area remains blank for a
       // future hard-file signature; the surrounding text stays in place.
-      // Move only the signature column down; BANK ACCOUNT remains unchanged.
+      // Move only the signature column below the reserved PAID slot;
+      // BANK ACCOUNT remains unchanged.
       const signatureY = Math.max(bankY, summaryY + signatureGap);
       pdf.setTextColor(...ink); pdf.setFontSize(9.5); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
       pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'});
