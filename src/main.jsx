@@ -570,6 +570,12 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
       for (const [index, paper] of papers.entries()) {
         const canvas = await html2canvas(paper, {
+          // Always render the export with a desktop-sized CSS viewport. On a
+          // phone, html2canvas otherwise applies the screen @media rules to
+          // the cloned A4 sheet (small fonts, mobile columns, etc.), then
+          // stretches that already-small layout to 210 x 297 mm in the PDF.
+          windowWidth: 1200,
+          windowHeight: 1600,
           scale: 2,
           useCORS: true,
           backgroundColor: '#ffffff',
@@ -578,13 +584,25 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
           height: paper.clientHeight,
           onclone: clonedDocument => {
             const clonedPaper = clonedDocument.querySelectorAll('.pdf-paper')[index];
+            const clonedFrame = clonedDocument.querySelector('.preview-sheet-frame');
+            if (clonedFrame) {
+              clonedFrame.style.setProperty('width', '794px', 'important');
+              clonedFrame.style.setProperty('padding', '0', 'important');
+              clonedFrame.style.setProperty('overflow', 'visible', 'important');
+            }
             if (clonedPaper) {
               clonedPaper.style.setProperty('box-shadow', 'none', 'important');
               clonedPaper.style.setProperty('border-radius', '0', 'important');
               // Screen preview is scaled on narrow devices; restore the
-              // physical A4 sheet before raster export so the PDF is unchanged.
+              // physical A4 sheet and desktop A4 typography before raster export.
               clonedPaper.style.setProperty('transform', 'none', 'important');
               clonedPaper.style.setProperty('margin', '0', 'important');
+              clonedPaper.style.setProperty('width', '210mm', 'important');
+              clonedPaper.style.setProperty('height', '297mm', 'important');
+              clonedPaper.style.setProperty('min-height', '297mm', 'important');
+              clonedPaper.style.setProperty('max-width', 'none', 'important');
+              clonedPaper.style.setProperty('padding', '11.5mm 12.5mm 13mm', 'important');
+              clonedPaper.style.setProperty('font-size', '10px', 'important');
             }
           }
         });
