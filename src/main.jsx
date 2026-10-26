@@ -355,7 +355,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
         .invoice-print-document,.invoice-print-document *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
         .invoice-print-document{display:block!important;width:210mm!important;margin:0 auto!important;background:#fff!important}
         .invoice-print-document .preview-sheet-frame{display:block!important;width:210mm!important;padding:0!important;border:0!important;background:#fff!important}
-        .invoice-print-document .pdf-paper{width:210mm!important;height:297mm!important;min-height:297mm!important;margin:0!important;padding:11.5mm 12.5mm 13mm!important;border-radius:0!important;box-shadow:none!important;break-after:page;page-break-after:always;overflow:hidden!important}
+        .invoice-print-document .pdf-paper{width:210mm!important;height:297mm!important;min-height:297mm!important;max-width:none!important;margin:0!important;padding:11.5mm 12.5mm 13mm!important;border-radius:0!important;box-shadow:none!important;transform:none!important;transform-origin:top left!important;--preview-scale:1!important;break-after:page;page-break-after:always;overflow:hidden!important}
+        .invoice-print-document .preview-sheet-frame .pdf-paper{transform:none!important;margin:0!important;margin-bottom:0!important}
         .invoice-print-document .mobile-invoice{display:flex!important;flex-direction:column!important;font-size:10px!important;padding:11.5mm 12.5mm 13mm!important}
         .invoice-print-document .mobile-invoice .pdf-top img{width:185px!important}
         .invoice-print-document .mobile-invoice .pdf-company{width:300px!important}
