@@ -334,9 +334,10 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
         pdf.setDrawColor(...red); pdf.setLineWidth(1); pdf.line(margin, 31, 194, 31);
         y = 42;
       }
-      // Anchor the closing block near the bottom of the A4 sheet when it fits.
-      // Long invoices still use the natural position after pagination.
-      const lowerY = Math.max(y + 8, 284 - (signatureOffset + 62));
+      // Keep TERMS and the payment summary immediately below the table.
+      // Only the page itself is A4; the text must not be pushed down merely
+      // to fill the unused white space on short invoices.
+      const lowerY = y + 8;
       const termsY = lowerY + 2, summaryY = lowerY;
       pdf.setTextColor(...red); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.text('TERMS', margin, termsY + 3);
       pdf.setTextColor(...ink); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.text(terms, margin, termsY + 10, { lineHeightFactor: 1.25 });
