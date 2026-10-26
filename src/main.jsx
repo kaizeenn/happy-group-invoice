@@ -275,7 +275,7 @@ function InvoicePreviewPage({ invoice, bankAccounts, items, continuation, closin
   return <div className={`pdf-paper mobile-invoice ${continuation ? 'preview-continuation' : ''}`}>
     {continuation ? <div className="preview-continuation-top"><img src="/assets/images/happy_group_logo.png"/><div><b>INVOICE</b><span>{invoice.number}</span></div></div> : <><div className="pdf-top"><img src="/assets/images/happy_group_logo.png"/><div className="pdf-company"><b>PT. HAPPY TRANS HARYADI</b><p>Kantor: {invoice.companyAddress}</p><p>0811 2867 917</p></div></div><div className="pdf-rule"/><div className="mobile-bill"><div><span>BILL TO</span><b>{invoice.customer || '-'}</b>{invoice.customerCompany && <p>{invoice.customerCompany}</p>}{invoice.customerPhone && <p>{invoice.customerPhone}</p>}</div><div className="invoice-meta"><h1>INVOICE</h1><p>Invoice #: <b>{invoice.number}</b></p><p>Tanggal: <b>{dateId.format(new Date(`${invoice.issueDate}T00:00:00`))}</b></p></div></div></>}
     {items.length > 0 && <div className="pdf-table"><div className="pdf-table-head"><span style={{textAlign: 'center'}}>ITEMS / DESKRIPSI</span><span>HARGA</span><span>QTY</span><span>TOTAL</span></div>{items.map(item => <div className="pdf-table-row" key={item.id}><div><b>{item.description}</b>{item.detail && <p>{item.detail}</p>}{item.note && <p>{item.note}</p>}</div><span>{IDR.format(Number(item.price || 0))}</span><span>{item.quantity} {unitOf(item)}</span><b>{IDR.format(Number(item.price || 0) * Number(item.quantity || 0))}</b></div>)}</div>}
-    {closing && <><div className="pdf-bottom"><div className="pdf-terms"><span>TERMS</span><p>{invoice.terms}</p></div><div className="pdf-summary"><div><span>Total</span><b>{IDR.format(totalOf(invoice))}</b></div><div><span>Paid</span><b>{IDR.format(paidOf(invoice))}</b></div><div className="due"><span>Amount Due (IDR)</span><b>{IDR.format(dueOf(invoice))}</b></div>{statusOf(invoice) === 'LUNAS' && <img className="paid-stamp" src="/assets/images/paid_stamp.png"/>}</div></div><div className={`mobile-lower ${statusOf(invoice) === 'LUNAS' ? 'has-paid' : ''}`}><div className="pdf-bank"><span>BANK ACCOUNT</span><p>{(bankAccounts || 'BCA 846-598-6111\nMANDIRI 137-00-4747-1111 PT HAPPY TRANS HARYADI\nBCA 8465-688-111 ARI HARYADI').split('\n').map((line, i) => <React.Fragment key={i}>{line}<br/></React.Fragment>)}</p></div><div className="pdf-sign"><div><span>Hormat kami,</span><b>PT. HAPPY TRANS HARYADI</b><img className={showSignature ? '' : 'signature-hidden'} src="/assets/images/signature_kiki_stamp.png"/><b>Kiki Saputri</b><small>Finance</small></div></div></div></>}
+    {closing && <><div className="pdf-bottom"><div className="pdf-terms"><span>TERMS</span><p>{invoice.terms}</p></div><div className="pdf-summary"><div><span>Total</span><b>{IDR.format(totalOf(invoice))}</b></div><div><span>Paid</span><b>{IDR.format(paidOf(invoice))}</b></div><div className="due"><span>Amount Due (IDR)</span><b>{IDR.format(dueOf(invoice))}</b></div>{statusOf(invoice) === 'LUNAS' && <img className="paid-stamp" src="/assets/images/paid_stamp.png"/>}</div></div><div className={`mobile-lower ${statusOf(invoice) === 'LUNAS' ? 'has-paid' : ''}`}><div className="pdf-bank"><span>BANK ACCOUNT</span><p>{(bankAccounts || 'BCA 8465-986-111 PT HAPPY TRANS HARYADI\nMANDIRI 137-00-4747-1111 PT HAPPY TRANS HARYADI\nBCA 8465-688-111 ARI HARYADI').split('\n').map((line, i) => <React.Fragment key={i}>{line}<br/></React.Fragment>)}</p></div><div className="pdf-sign"><div><span>Hormat kami,</span><b>PT. HAPPY TRANS HARYADI</b><img className={showSignature ? '' : 'signature-hidden'} src="/assets/images/signature_kiki_stamp.png"/><b>Kiki Saputri</b><small>Finance</small></div></div></div></>}
   </div>;
 }
 
@@ -286,9 +286,33 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
   const previewPages = useMemo(() => buildPreviewPages(invoice, bankAccounts), [invoice, bankAccounts]);
   const canAddPayment = dueOf(invoice) > 0;
   useEffect(() => { const closeOnEscape = event => event.key === 'Escape' && onClose(); window.addEventListener('keydown', closeOnEscape); return () => window.removeEventListener('keydown', closeOnEscape); }, [onClose]);
-  // Vector/text PDF export: all invoice text is drawn with jsPDF.text().
-  // Images are limited to branding, paid stamp, and signature artwork.
+  // Export through the exact DOM/CSS used by the preview. The browser print
+  // engine creates selectable text and keeps every spacing decision identical.
   const exportPdf = async () => {
+    setBusy(true);
+    const cleanup = () => {
+      document.body.classList.remove('invoice-printing');
+      window.removeEventListener('afterprint', cleanup);
+      setBusy(false);
+    };
+    try {
+      await document.fonts?.ready;
+      await Promise.all([...previewPaperRef.current?.querySelectorAll('img') || []].map(image => image.decode().catch(() => {})));
+      document.body.classList.add('invoice-printing');
+      window.addEventListener('afterprint', cleanup, { once: true });
+      requestAnimationFrame(() => window.print());
+      // Some embedded browsers do not emit afterprint; do not leave the app
+      // stuck in print mode in that case.
+      window.setTimeout(cleanup, 3000);
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
+  };
+
+  // Kept as an internal fallback while old sessions finish using the legacy
+  // vector path. It is not wired to the download button anymore.
+  const exportPdfLegacyVector = async () => {
     setBusy(true);
     try {
       const [logo, signature, paid] = await Promise.all([
@@ -411,13 +435,15 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       // Leave a real safety gap after PAID before BANK ACCOUNT/TTD. Without
       // this, the closing row starts exactly where the stamp ends.
       const lowerRowY = Math.max(termsEndY + 8, summaryY + (hasStamp ? 58 : 24));
-      const bankY = lowerRowY;
+      // BANK ACCOUNT follows TERMS on the left. Keep it independent from the
+      // PAID/signature column so the payment stamp cannot push it downward.
+      const bankY = termsEndY + 8;
       pdf.setTextColor(...red); pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.text('BANK ACCOUNT', margin, bankY);
       pdf.setTextColor(...ink); pdf.setFont('helvetica','normal'); pdf.setFontSize(9.5); pdf.text(bankLines, margin, bankY+8, { lineHeightFactor: 1.2 });
       // The bank account stays on the left while the signature stays on the right.
       // When the image is disabled, the same 40x28 mm area remains blank for a
       // future hard-file signature; the surrounding text stays in place.
-      const signatureY = lowerRowY;
+      const signatureY = Math.max(bankY, summaryY + (hasStamp ? 58 : 24));
       pdf.setTextColor(...ink); pdf.setFontSize(9.5); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
       pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'});
       if (showSignature) pdf.addImage(signature, 'JPEG', 161, signatureY+7, 40, 22);
