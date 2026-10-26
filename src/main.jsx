@@ -343,9 +343,9 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
         .invoice-print-document .mobile-invoice .paid-stamp{position:static!important;width:160px!important;height:auto!important;transform:none!important}
         .invoice-print-document .mobile-invoice .pdf-left-column .pdf-bank{margin-top:24px!important}
         .invoice-print-document .mobile-invoice .pdf-bank p{font-size:13px!important;line-height:1.4!important}
-        .invoice-print-document .mobile-invoice .pdf-sign{margin:0!important;justify-content:flex-end!important;padding-right:4px!important;transform:translateX(68px)!important}
+        .invoice-print-document .mobile-invoice .pdf-sign{margin:0!important;justify-content:flex-end!important;padding-right:4px!important;transform:none!important}
         .invoice-print-document .mobile-invoice .pdf-sign>div{width:240px!important}
-        .invoice-print-document .mobile-invoice .pdf-sign img:not(.paid-stamp){width:210px!important;height:92px!important}
+        .invoice-print-document .mobile-invoice .pdf-sign img:not(.paid-stamp){width:210px!important;height:92px!important;margin-left:30px!important;transform:translateX(18px)!important}
         .invoice-print-document .mobile-invoice .pdf-sign b{font-size:13px!important}
         .invoice-print-document .mobile-invoice .pdf-sign small{font-size:12px!important}
         .invoice-print-document .pdf-rule{background:#ef2624!important}
