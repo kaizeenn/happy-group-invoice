@@ -307,8 +307,9 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const frameDocument = printFrame.contentDocument;
       const styles = [...document.querySelectorAll('link[rel="stylesheet"], style')]
         .map(node => node.outerHTML).join('');
+      const printTitle = String(invoice.number || 'invoice').replace(/[^a-zA-Z0-9._-]+/g, '-');
       frameDocument.open();
-      frameDocument.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1200">${styles}<style>
+      frameDocument.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1200"><title>${printTitle}</title>${styles}<style>
         @page{size:A4;margin:0}
         html,body{margin:0!important;padding:0!important;background:#fff!important}
         .invoice-print-document,.invoice-print-document *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
