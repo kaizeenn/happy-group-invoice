@@ -294,7 +294,9 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
     // download path there so the browser receives a real filename and Blob.
     const userAgent = navigator.userAgent || '';
     const isChromium = /Chrome|CriOS|Chromium|Edg\//.test(userAgent);
-    const needsDirectDownload = !isChromium && /Firefox|FxiOS|Safari|Macintosh|iPhone|iPad/.test(userAgent);
+    const isSamsungInternet = /SamsungBrowser/i.test(userAgent);
+    const isMobileWebView = /; wv\)|\bVersion\/\d+.*Chrome/i.test(userAgent);
+    const needsDirectDownload = isSamsungInternet || isMobileWebView || (!isChromium && /Firefox|FxiOS|Safari|Macintosh|iPhone|iPad/.test(userAgent));
     if (needsDirectDownload) return exportPdfLegacyVector();
     setBusy(true);
     const previousDocumentTitle = document.title;
@@ -309,6 +311,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       await Promise.all([...previewPaperRef.current?.querySelectorAll('img') || []].map(image => image.decode().catch(() => {})));
       document.body.classList.add('invoice-printing');
       // Print only the invoice sheet, not the dashboard behind the modal.
+      // Clone only the rendered paper sheets, never the modal header/footer;
+      // this keeps the Close/Exit button out of browser print output.
       const printFrame = document.createElement('iframe');
       printFrame.className = 'invoice-print-frame';
       printFrame.setAttribute('title', 'Invoice PDF');
@@ -322,6 +326,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       // rather than the print iframe title, as the suggested PDF filename.
       document.title = printTitle;
       frameDocument.open();
+      const paperMarkup = [...previewPaperRef.current.querySelectorAll(':scope > .pdf-paper')]
+        .map(paper => paper.outerHTML).join('');
       frameDocument.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1200"><title>${printTitle}</title>${styles}<style>
         @page{size:A4;margin:0}
         html,body{margin:0!important;padding:0!important;background:#fff!important}
@@ -366,7 +372,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
         .invoice-print-document .pdf-table-head{background:#e8e8e8!important}
         .invoice-print-document .mobile-bill>div>span,.invoice-print-document .pdf-bank>span,.invoice-print-document .pdf-terms>span,.invoice-print-document .invoice-meta h1{color:#ef2624!important}
         .invoice-print-document .pdf-paper:last-child{break-after:auto;page-break-after:auto}
-      </style></head><body><div class="invoice-print-document"><div class="preview-sheet-frame">${previewPaperRef.current.innerHTML}</div></div></body></html>`);
+      </style></head><body><div class="invoice-print-document"><div class="preview-sheet-frame">${paperMarkup}</div></div></body></html>`);
       frameDocument.close();
       const printWindow = printFrame.contentWindow;
       const removeFrame = () => { printFrame.remove(); cleanup(); };
