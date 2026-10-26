@@ -581,6 +581,10 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
             if (clonedPaper) {
               clonedPaper.style.setProperty('box-shadow', 'none', 'important');
               clonedPaper.style.setProperty('border-radius', '0', 'important');
+              // Screen preview is scaled on narrow devices; restore the
+              // physical A4 sheet before raster export so the PDF is unchanged.
+              clonedPaper.style.setProperty('transform', 'none', 'important');
+              clonedPaper.style.setProperty('margin', '0', 'important');
             }
           }
         });
