@@ -289,6 +289,13 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
   // Export through the exact DOM/CSS used by the preview. The browser print
   // engine creates selectable text and keeps every spacing decision identical.
   const exportPdf = async () => {
+    // Safari and Firefox may turn window.print() output into a temporary file
+    // and ignore both iframe/document titles. Use the deterministic jsPDF
+    // download path there so the browser receives a real filename and Blob.
+    const userAgent = navigator.userAgent || '';
+    const isChromium = /Chrome|CriOS|Chromium|Edg\//.test(userAgent);
+    const needsDirectDownload = !isChromium && /Firefox|FxiOS|Safari|Macintosh|iPhone|iPad/.test(userAgent);
+    if (needsDirectDownload) return exportPdfLegacyVector();
     setBusy(true);
     const previousDocumentTitle = document.title;
     const cleanup = () => {
@@ -514,7 +521,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       if (showSignature) pdf.addImage(signature, 'JPEG', 161, signatureY+7, 40, 22);
       pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.text('Kiki Saputri',181,signatureY+40,{align:'center'});
       pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.setTextColor(...ink); pdf.text('Finance',181,signatureY+45,{align:'center'});
-      pdf.save(`${invoice.number}.pdf`);
+      const filePart = String(invoice.number || 'invoice').replace(/[^a-zA-Z0-9._-]+/g, '-');
+      pdf.save(`Happy Group Invoice - ${filePart}.pdf`);
     } finally { setBusy(false); }
   };
   const exportPdfRasterLegacy = async () => {
