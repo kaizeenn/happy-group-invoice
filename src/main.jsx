@@ -299,8 +299,25 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       await document.fonts?.ready;
       await Promise.all([...previewPaperRef.current?.querySelectorAll('img') || []].map(image => image.decode().catch(() => {})));
       document.body.classList.add('invoice-printing');
-      window.addEventListener('afterprint', cleanup, { once: true });
-      requestAnimationFrame(() => window.print());
+      // Print only the invoice sheet, not the dashboard behind the modal.
+      const printFrame = document.createElement('iframe');
+      printFrame.className = 'invoice-print-frame';
+      printFrame.setAttribute('title', 'Invoice PDF');
+      document.body.appendChild(printFrame);
+      const frameDocument = printFrame.contentDocument;
+      const styles = [...document.querySelectorAll('link[rel="stylesheet"], style')]
+        .map(node => node.outerHTML).join('');
+      frameDocument.open();
+      frameDocument.write(`<!doctype html><html><head><meta charset="utf-8">${styles}</head><body class="invoice-printing"><div class="invoice-print-document">${previewPaperRef.current.innerHTML}</div></body></html>`);
+      frameDocument.close();
+      const printWindow = printFrame.contentWindow;
+      const removeFrame = () => { printFrame.remove(); cleanup(); };
+      printWindow.addEventListener('afterprint', removeFrame, { once: true });
+      printFrame.onload = () => {
+        Promise.all([...frameDocument.images].map(image => image.decode?.().catch(() => {}) || Promise.resolve()))
+          .then(() => printWindow.print());
+      };
+      window.setTimeout(removeFrame, 5000);
       // Some embedded browsers do not emit afterprint; do not leave the app
       // stuck in print mode in that case.
       window.setTimeout(cleanup, 3000);
