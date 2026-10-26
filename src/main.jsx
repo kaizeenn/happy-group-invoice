@@ -325,9 +325,6 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
           .then(() => printWindow.print());
       };
       window.setTimeout(removeFrame, 5000);
-      // Some embedded browsers do not emit afterprint; do not leave the app
-      // stuck in print mode in that case.
-      window.setTimeout(cleanup, 3000);
     } catch (error) {
       cleanup();
       throw error;
