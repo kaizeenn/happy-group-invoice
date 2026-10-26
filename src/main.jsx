@@ -346,8 +346,9 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
         .invoice-print-document .mobile-invoice .pdf-sign{margin:0!important;justify-content:flex-end!important;padding-right:4px!important;transform:none!important}
         .invoice-print-document .mobile-invoice .pdf-sign>div{width:240px!important}
         .invoice-print-document .mobile-invoice .pdf-sign img:not(.paid-stamp){width:210px!important;height:92px!important;margin-left:30px!important;transform:translateX(18px)!important}
-        .invoice-print-document .mobile-invoice .pdf-sign b{font-size:13px!important}
-        .invoice-print-document .mobile-invoice .pdf-sign small{font-size:12px!important}
+        .invoice-print-document .mobile-invoice .pdf-sign b{font-size:14px!important}
+        .invoice-print-document .mobile-invoice .pdf-sign small{font-size:13px!important}
+        .invoice-print-document .mobile-invoice .pdf-sign>div>span{font-size:15px!important}
         .invoice-print-document .pdf-rule{background:#ef2624!important}
         .invoice-print-document .pdf-table-head{background:#e8e8e8!important}
         .invoice-print-document .mobile-bill>div>span,.invoice-print-document .pdf-bank>span,.invoice-print-document .pdf-terms>span,.invoice-print-document .invoice-meta h1{color:#ef2624!important}
