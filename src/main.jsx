@@ -308,7 +308,14 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const styles = [...document.querySelectorAll('link[rel="stylesheet"], style')]
         .map(node => node.outerHTML).join('');
       frameDocument.open();
-      frameDocument.write(`<!doctype html><html><head><meta charset="utf-8">${styles}</head><body class="invoice-printing"><div class="invoice-print-document">${previewPaperRef.current.innerHTML}</div></body></html>`);
+      frameDocument.write(`<!doctype html><html><head><meta charset="utf-8">${styles}<style>
+        @page{size:A4;margin:0}
+        html,body{margin:0!important;padding:0!important;background:#fff!important}
+        .invoice-print-document{display:block!important;width:100%!important;min-height:100%;background:#fff}
+        .invoice-print-document .preview-sheet-frame{display:block!important;padding:0!important;border:0!important;background:#fff!important}
+        .invoice-print-document .pdf-paper{width:210mm!important;height:297mm!important;min-height:297mm!important;margin:0!important;padding:11.5mm 12.5mm 13mm!important;border-radius:0!important;box-shadow:none!important;break-after:page;page-break-after:always}
+        .invoice-print-document .pdf-paper:last-child{break-after:auto;page-break-after:auto}
+      </style></head><body><div class="invoice-print-document"><div class="preview-sheet-frame">${previewPaperRef.current.innerHTML}</div></div></body></html>`);
       frameDocument.close();
       const printWindow = printFrame.contentWindow;
       const removeFrame = () => { printFrame.remove(); cleanup(); };
