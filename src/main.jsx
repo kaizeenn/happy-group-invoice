@@ -329,6 +329,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
         .invoice-print-document .mobile-invoice .invoice-meta h1{font-size:34px!important;color:#ef2624!important}
         .invoice-print-document .mobile-invoice .pdf-table-head,.invoice-print-document .mobile-invoice .pdf-table-row{grid-template-columns:minmax(0,1fr) 100px 90px 110px!important}
         .invoice-print-document .mobile-invoice .pdf-table-head{font-size:12px!important;padding:13px 11px!important;background:#e8e8e8!important}
+        .invoice-print-document .mobile-invoice .pdf-table-head span,.invoice-print-document .mobile-invoice .pdf-table-row>span,.invoice-print-document .mobile-invoice .pdf-table-row>b{font-size:12px!important}
         .invoice-print-document .mobile-invoice .pdf-table-row{font-size:12px!important;min-height:70px!important;padding:14px 11px!important}
         .invoice-print-document .mobile-invoice .pdf-table-row>div b{font-size:15px!important}
         .invoice-print-document .mobile-invoice .pdf-table-row p{font-size:12px!important}
@@ -342,7 +343,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
         .invoice-print-document .mobile-invoice .paid-stamp{position:static!important;width:160px!important;height:auto!important;transform:none!important}
         .invoice-print-document .mobile-invoice .pdf-left-column .pdf-bank{margin-top:24px!important}
         .invoice-print-document .mobile-invoice .pdf-bank p{font-size:13px!important;line-height:1.4!important}
-        .invoice-print-document .mobile-invoice .pdf-sign{margin:0!important;justify-content:flex-end!important;padding-right:4px!important;transform:translateX(28px)!important}
+        .invoice-print-document .mobile-invoice .pdf-sign{margin:0!important;justify-content:flex-end!important;padding-right:4px!important;transform:translateX(44px)!important}
         .invoice-print-document .mobile-invoice .pdf-sign>div{width:240px!important}
         .invoice-print-document .mobile-invoice .pdf-sign img:not(.paid-stamp){width:210px!important;height:92px!important}
         .invoice-print-document .mobile-invoice .pdf-sign b{font-size:13px!important}
