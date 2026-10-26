@@ -477,7 +477,11 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const contactsEndRel = bankStartRel + 8 + bankLines.length * 3.4;
       // Tanda tangan cukup mulai 60 mm di bawah ringkasan agar bebas dari stempel PAID
       // (stempel berakhir di 65 mm, gambar ttd mulai +7) — bukan 38+65 yang menumpuk ruang kosong.
-      const signatureOffset = Math.max(28 + terms.length * 3.6, hasStamp ? 50 : 30);
+      // Samsung Internet uses this direct vector renderer. Keep its TTD lower,
+      // matching the preview's payment-summary + paid-slot spacing instead of
+      // placing the signature immediately under the payment box.
+      const signatureGap = hasStamp ? 78 : 44;
+      const signatureOffset = Math.max(28 + terms.length * 3.6, signatureGap);
       const signatureEndRel = signatureOffset + 52;
       const lowerHeight = 8 + Math.max(contactsEndRel, signatureEndRel);
       // Move the closing section as a unit if the remaining space cannot fit it.
@@ -521,7 +525,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       // The bank account stays on the left while the signature stays on the right.
       // When the image is disabled, the same 40x28 mm area remains blank for a
       // future hard-file signature; the surrounding text stays in place.
-      const signatureY = Math.max(bankY, summaryY + (hasStamp ? 58 : 24));
+      // Move only the signature column down; BANK ACCOUNT remains unchanged.
+      const signatureY = Math.max(bankY, summaryY + signatureGap);
       pdf.setTextColor(...ink); pdf.setFontSize(9.5); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
       pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'});
       if (showSignature) pdf.addImage(signature, 'JPEG', 161, signatureY+7, 40, 22);
