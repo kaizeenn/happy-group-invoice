@@ -377,6 +377,10 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
           if (clonedPaper) {
             clonedPaper.style.setProperty('box-shadow', 'none', 'important');
             clonedPaper.style.setProperty('border-radius', '0', 'important');
+            // A short invoice still occupies the complete printable A4 height.
+            // Keep this true even when PDF export is triggered from a narrow viewport.
+            const a4ContentHeight = clonedPaper.clientWidth * (273 / 186);
+            clonedPaper.style.setProperty('min-height', `${a4ContentHeight}px`, 'important');
           }
         }
       });
