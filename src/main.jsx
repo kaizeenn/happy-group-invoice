@@ -233,7 +233,9 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
   const previewPaperRef = useRef(null);
   const canAddPayment = dueOf(invoice) > 0;
   useEffect(() => { const closeOnEscape = event => event.key === 'Escape' && onClose(); window.addEventListener('keydown', closeOnEscape); return () => window.removeEventListener('keydown', closeOnEscape); }, [onClose]);
-  const exportPdfLegacy = async () => {
+  // Vector/text PDF export: all invoice text is drawn with jsPDF.text().
+  // Images are limited to branding, paid stamp, and signature artwork.
+  const exportPdf = async () => {
     setBusy(true);
     try {
       const [logo, signature, paid] = await Promise.all([
@@ -320,7 +322,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const contactsEndRel = bankStartRel + 8 + bankLines.length * 3.4;
       // Tanda tangan cukup mulai 60 mm di bawah ringkasan agar bebas dari stempel PAID
       // (stempel berakhir di 65 mm, gambar ttd mulai +7) — bukan 38+65 yang menumpuk ruang kosong.
-      const signatureEndRel = Math.max(termsEndRel + 20, hasStamp ? 70 : 38) + 52;
+      const signatureOffset = Math.max(32 + terms.length * 3.6, hasStamp ? 70 : 38);
+      const signatureEndRel = signatureOffset + 62;
       const lowerHeight = 8 + Math.max(contactsEndRel, signatureEndRel);
       // Move the closing section as a unit if the remaining space cannot fit it.
       if (y + lowerHeight > 284) {
@@ -331,7 +334,10 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
         pdf.setDrawColor(...red); pdf.setLineWidth(1); pdf.line(margin, 31, 194, 31);
         y = 42;
       }
-      const lowerY = y + 8, termsY = lowerY + 2, summaryY = lowerY;
+      // Anchor the closing block near the bottom of the A4 sheet when it fits.
+      // Long invoices still use the natural position after pagination.
+      const lowerY = Math.max(y + 8, 284 - (signatureOffset + 62));
+      const termsY = lowerY + 2, summaryY = lowerY;
       pdf.setTextColor(...red); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.text('TERMS', margin, termsY + 3);
       pdf.setTextColor(...ink); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.text(terms, margin, termsY + 10, { lineHeightFactor: 1.25 });
       pdf.setDrawColor(165,165,165); pdf.setLineWidth(.35); pdf.rect(119, summaryY, 75, 30);
@@ -347,17 +353,18 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       // The bank account stays on the left while the signature stays on the right.
       // Start the signature after the terms (with 20 mm breathing room) so it never
       // overlaps the terms, while avoiding an unnecessarily low signature position.
-      const signatureY = Math.max(termsEndY + 20, summaryY + (hasStamp ? 70 : 38));
+      const signatureY = summaryY + signatureOffset;
       pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
       pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'});
-      // Ukuran ttd disamakan dengan tampilan preview (±30×21 mm) agar tidak terlalu besar saat diunduh.
-      pdf.addImage(signature, 'JPEG', 166, signatureY+7, 30, 21);
-      pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('Kiki Saputri',181,signatureY+44,{align:'center'});
-      pdf.setFont('helvetica','bold'); pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text('Finance',181,signatureY+49,{align:'center'});
+      // Signature artwork stays larger and remains an image; all labels around it
+      // remain selectable PDF text.
+      pdf.addImage(signature, 'JPEG', 161, signatureY+7, 40, 28);
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('Kiki Saputri',181,signatureY+52,{align:'center'});
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text('Finance',181,signatureY+57,{align:'center'});
       pdf.save(`${invoice.number}.pdf`);
     } finally { setBusy(false); }
   };
-  const exportPdf = async () => {
+  const exportPdfRasterLegacy = async () => {
     if (!previewPaperRef.current) return;
     setBusy(true);
     try {
