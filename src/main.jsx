@@ -308,16 +308,45 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const styles = [...document.querySelectorAll('link[rel="stylesheet"], style')]
         .map(node => node.outerHTML).join('');
       frameDocument.open();
-      frameDocument.write(`<!doctype html><html><head><meta charset="utf-8">${styles}<style>
+      frameDocument.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1200">${styles}<style>
         @page{size:A4;margin:0}
         html,body{margin:0!important;padding:0!important;background:#fff!important}
         .invoice-print-document,.invoice-print-document *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
         .invoice-print-document{display:block!important;width:210mm!important;margin:0 auto!important;background:#fff!important}
         .invoice-print-document .preview-sheet-frame{display:block!important;width:210mm!important;padding:0!important;border:0!important;background:#fff!important}
+        .invoice-print-document .pdf-paper{width:210mm!important;height:297mm!important;min-height:297mm!important;margin:0!important;padding:11.5mm 12.5mm 13mm!important;border-radius:0!important;box-shadow:none!important;break-after:page;page-break-after:always;overflow:hidden!important}
+        .invoice-print-document .mobile-invoice{display:flex!important;flex-direction:column!important;font-size:10px!important;padding:11.5mm 12.5mm 13mm!important}
+        .invoice-print-document .mobile-invoice .pdf-top img{width:185px!important}
+        .invoice-print-document .mobile-invoice .pdf-company{width:300px!important}
+        .invoice-print-document .mobile-invoice .pdf-company b{font-size:15px!important}
+        .invoice-print-document .mobile-invoice .pdf-company p{font-size:10px!important}
+        .invoice-print-document .mobile-invoice .pdf-rule{height:4px!important;margin:25px 0 28px!important;background:#ef2624!important}
+        .invoice-print-document .mobile-invoice .mobile-bill{min-height:98px!important}
+        .invoice-print-document .mobile-invoice .mobile-bill>div>span,.invoice-print-document .mobile-invoice .pdf-bank>span,.invoice-print-document .mobile-invoice .pdf-terms>span{font-size:12px!important}
+        .invoice-print-document .mobile-invoice .mobile-bill>div>b{font-size:19px!important}
+        .invoice-print-document .mobile-invoice .mobile-bill p,.invoice-print-document .mobile-invoice .invoice-meta p{font-size:11px!important}
+        .invoice-print-document .mobile-invoice .invoice-meta h1{font-size:34px!important;color:#ef2624!important}
+        .invoice-print-document .mobile-invoice .pdf-table-head,.invoice-print-document .mobile-invoice .pdf-table-row{grid-template-columns:minmax(0,1fr) 100px 90px 110px!important}
+        .invoice-print-document .mobile-invoice .pdf-table-head{font-size:12px!important;padding:13px 11px!important;background:#e8e8e8!important}
+        .invoice-print-document .mobile-invoice .pdf-table-row{font-size:12px!important;min-height:70px!important;padding:14px 11px!important}
+        .invoice-print-document .mobile-invoice .pdf-table-row>div b{font-size:15px!important}
+        .invoice-print-document .mobile-invoice .pdf-table-row p{font-size:12px!important}
+        .invoice-print-document .mobile-invoice .pdf-bottom{grid-template-columns:1fr 265px!important;gap:30px!important;margin-top:22px!important}
+        .invoice-print-document .mobile-invoice .pdf-terms p{font-size:12px!important}
+        .invoice-print-document .mobile-invoice .pdf-summary{padding:18px!important}
+        .invoice-print-document .mobile-invoice .pdf-summary>div{font-size:12px!important;margin:6px 0!important}
+        .invoice-print-document .mobile-invoice .pdf-summary .due{font-size:15px!important;margin-top:15px!important;padding-top:15px!important}
+        .invoice-print-document .mobile-invoice .paid-slot{height:84px!important;padding-top:8px!important}
+        .invoice-print-document .mobile-invoice .paid-stamp{position:static!important;width:160px!important;height:auto!important}
+        .invoice-print-document .mobile-invoice .mobile-lower{display:grid!important;grid-template-columns:1fr 265px!important;gap:30px!important;margin-top:16px!important;padding-top:8px!important}
+        .invoice-print-document .mobile-invoice .pdf-bank p{font-size:13px!important;line-height:1.4!important}
+        .invoice-print-document .mobile-invoice .pdf-sign>div{width:210px!important}
+        .invoice-print-document .mobile-invoice .pdf-sign img:not(.paid-stamp){width:170px!important;height:76px!important}
+        .invoice-print-document .mobile-invoice .pdf-sign b{font-size:13px!important}
+        .invoice-print-document .mobile-invoice .pdf-sign small{font-size:12px!important}
         .invoice-print-document .pdf-rule{background:#ef2624!important}
         .invoice-print-document .pdf-table-head{background:#e8e8e8!important}
         .invoice-print-document .mobile-bill>div>span,.invoice-print-document .pdf-bank>span,.invoice-print-document .pdf-terms>span,.invoice-print-document .invoice-meta h1{color:#ef2624!important}
-        .invoice-print-document .pdf-paper{width:210mm!important;height:297mm!important;min-height:297mm!important;margin:0!important;padding:11.5mm 12.5mm 13mm!important;border-radius:0!important;box-shadow:none!important;break-after:page;page-break-after:always;overflow:hidden!important}
         .invoice-print-document .pdf-paper:last-child{break-after:auto;page-break-after:auto}
       </style></head><body><div class="invoice-print-document"><div class="preview-sheet-frame">${previewPaperRef.current.innerHTML}</div></div></body></html>`);
       frameDocument.close();
