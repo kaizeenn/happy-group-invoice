@@ -398,14 +398,14 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       pdf.setTextColor(...red); pdf.text(money(due),190,summaryY+27,{align:'right'});
       // Center the compact PAID mark in the payment column so it stays
       // symmetrical without creating a large gap before the closing row.
-      if (hasStamp) pdf.addImage(paid, 'JPEG', 132.5, summaryY + 31, 48, 22);
+      if (hasStamp) pdf.addImage(paid, 'JPEG', 134, summaryY + 31, 45, 17);
       const termsEndY = termsY + 10 + terms.length * 3.6;
       // The preview pushes BANK ACCOUNT and the signature block to the bottom
       // on a short one-page invoice. TERMS and the payment summary stay directly
       // below the table; only this lower row uses the remaining white space.
-      // Keep BANK ACCOUNT and the signature close to TERMS/PAID. The PAID
-      // artwork is compact, so only a small safety gap is needed below it.
-      const lowerRowY = Math.max(termsEndY + 10, summaryY + (hasStamp ? 56 : 28));
+      // Keep the closing row compact. PAID is a small mark below the summary;
+      // BANK ACCOUNT and the signature follow it with only a short gap.
+      const lowerRowY = Math.max(termsEndY + 8, summaryY + (hasStamp ? 48 : 24));
       const bankY = lowerRowY;
       pdf.setTextColor(...red); pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.text('BANK ACCOUNT', margin, bankY);
       pdf.setTextColor(...ink); pdf.setFont('helvetica','normal'); pdf.setFontSize(9.5); pdf.text(bankLines, margin, bankY+8, { lineHeightFactor: 1.2 });
