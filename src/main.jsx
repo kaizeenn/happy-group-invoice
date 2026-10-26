@@ -281,6 +281,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
   const [showSignature, setShowSignature] = useState(true);
   const previewPaperRef = useRef(null);
   const previewPages = useMemo(() => buildPreviewPages(invoice, bankAccounts), [invoice, bankAccounts]);
+  const previewPageCount = previewPages.length;
   const canAddPayment = dueOf(invoice) > 0;
   useEffect(() => { const closeOnEscape = event => event.key === 'Escape' && onClose(); window.addEventListener('keydown', closeOnEscape); return () => window.removeEventListener('keydown', closeOnEscape); }, [onClose]);
   // Vector/text PDF export: all invoice text is drawn with jsPDF.text().
