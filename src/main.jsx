@@ -261,8 +261,10 @@ const buildPreviewPages = (invoice, bankAccounts) => {
   const bankLines = String(bankAccounts || 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI').split('\n').map(line => line.trim()).filter(Boolean);
   const termsEndRel = 12 + termsLines * 3.6;
   const contactsEndRel = termsEndRel + 8 + 8 + bankLines.length * 3.4;
-  const signatureOffset = Math.max(32 + termsLines * 3.6, statusOf(invoice) === 'LUNAS' ? 70 : 38);
-  const lowerHeight = 8 + Math.max(contactsEndRel, signatureOffset + 62);
+  // Keep the reserved signature area compact while leaving enough room for
+  // the digital mark or a hardfile signature.
+  const signatureOffset = Math.max(28 + termsLines * 3.6, statusOf(invoice) === 'LUNAS' ? 54 : 32);
+  const lowerHeight = 8 + Math.max(contactsEndRel, signatureOffset + 52);
   if (y + lowerHeight > 284) pages.push({ items: [], continuation: true, closing: true });
   else pages[pages.length - 1].closing = true;
   return pages;
@@ -372,8 +374,8 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const contactsEndRel = bankStartRel + 8 + bankLines.length * 3.4;
       // Tanda tangan cukup mulai 60 mm di bawah ringkasan agar bebas dari stempel PAID
       // (stempel berakhir di 65 mm, gambar ttd mulai +7) — bukan 38+65 yang menumpuk ruang kosong.
-      const signatureOffset = Math.max(32 + terms.length * 3.6, hasStamp ? 70 : 38);
-      const signatureEndRel = signatureOffset + 62;
+      const signatureOffset = Math.max(28 + terms.length * 3.6, hasStamp ? 50 : 30);
+      const signatureEndRel = signatureOffset + 52;
       const lowerHeight = 8 + Math.max(contactsEndRel, signatureEndRel);
       // Move the closing section as a unit if the remaining space cannot fit it.
       if (y + lowerHeight > 284) {
@@ -415,9 +417,9 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       const signatureY = lowerRowY;
       pdf.setTextColor(...ink); pdf.setFontSize(9.5); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
       pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'});
-      if (showSignature) pdf.addImage(signature, 'JPEG', 161, signatureY+7, 40, 28);
-      pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.text('Kiki Saputri',181,signatureY+52,{align:'center'});
-      pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.setTextColor(...ink); pdf.text('Finance',181,signatureY+57,{align:'center'});
+      if (showSignature) pdf.addImage(signature, 'JPEG', 161, signatureY+7, 40, 22);
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.text('Kiki Saputri',181,signatureY+40,{align:'center'});
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.setTextColor(...ink); pdf.text('Finance',181,signatureY+45,{align:'center'});
       pdf.save(`${invoice.number}.pdf`);
     } finally { setBusy(false); }
   };
