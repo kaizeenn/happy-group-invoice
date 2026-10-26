@@ -235,6 +235,10 @@ const previewPdfItemHeight = item => {
   const noteLines = item.note ? previewWrapCount(item.note, 62) : 0;
   return Math.max(14, 5 + (titleLines + detailLines + noteLines) * 4);
 };
+// The direct-download vector renderer uses the same closing geometry as the
+// DOM preview. Keeping these values in one place prevents browser-specific drift.
+const paidSlotMm = 24;
+const signatureGapMm = 30 + paidSlotMm;
 // Keep the visual preview paginated with the same row budget used by exportPdf.
 // This makes long invoices read as A4 sheets instead of one stretched canvas and
 // keeps the closing/signature block on the final sheet only.
@@ -263,7 +267,7 @@ const buildPreviewPages = (invoice, bankAccounts) => {
   const contactsEndRel = termsEndRel + 8 + 8 + bankLines.length * 3.4;
   // Keep the reserved signature area compact while leaving enough room for
   // the digital mark or a hardfile signature.
-  const signatureOffset = Math.max(28 + termsLines * 3.6, statusOf(invoice) === 'LUNAS' ? 54 : 32);
+  const signatureOffset = Math.max(28 + termsLines * 3.6, signatureGapMm);
   const paidReserve = statusOf(invoice) === 'LUNAS' ? 88 : 0;
   const lowerHeight = 8 + Math.max(contactsEndRel, signatureOffset + 52, paidReserve);
   if (y + lowerHeight > 284) pages.push({ items: [], continuation: true, closing: true });
@@ -297,7 +301,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
     const isSamsungInternet = /SamsungBrowser/i.test(userAgent);
     const isMobileWebView = /; wv\)|\bVersion\/\d+.*Chrome/i.test(userAgent);
     const needsDirectDownload = isSamsungInternet || isMobileWebView || (!isChromium && /Firefox|FxiOS|Safari|Macintosh|iPhone|iPad/.test(userAgent));
-    if (needsDirectDownload) return exportPdfLegacyVector();
+    if (needsDirectDownload) return exportPdfRasterLegacy();
     setBusy(true);
     const previousDocumentTitle = document.title;
     const cleanup = () => {
@@ -478,8 +482,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       // Reserve one fixed PAID slot for both paid and unpaid invoices, just
       // like the preview. The signature starts after that slot; it must not
       // jump higher/lower depending on whether the stamp image is visible.
-      const paidSlotHeight = 24;
-      const signatureGap = 30 + paidSlotHeight;
+      const signatureGap = signatureGapMm;
       const signatureOffset = Math.max(28 + terms.length * 3.6, signatureGap);
       const signatureEndRel = signatureOffset + 52;
       const lowerHeight = 8 + Math.max(contactsEndRel, signatureEndRel);
@@ -541,66 +544,34 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
     setBusy(true);
     try {
       await document.fonts?.ready;
-      await Promise.all([...previewPaperRef.current.querySelectorAll('img')].map(image => image.decode().catch(() => {})));
-      const element = previewPaperRef.current;
-      const renderScale = 2;
-      const canvas = await html2canvas(element, {
-        scale: renderScale,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        width: element.clientWidth,
-        height: element.scrollHeight,
-        onclone: clonedDocument => {
-          const clonedPaper = clonedDocument.querySelector('.mobile-invoice');
-          if (clonedPaper) {
-            clonedPaper.style.setProperty('box-shadow', 'none', 'important');
-            clonedPaper.style.setProperty('border-radius', '0', 'important');
-            // A short invoice still occupies the complete printable A4 height.
-            // Keep this true even when PDF export is triggered from a narrow viewport.
-            const a4ContentHeight = clonedPaper.clientWidth * (273 / 186);
-            clonedPaper.style.setProperty('min-height', `${a4ContentHeight}px`, 'important');
-          }
-        }
-      });
-      // Keep the preview's visual design, but paginate it onto standard A4
-      // sheets. Prefer breaks between item rows so long invoices continue
-      // naturally rather than being compressed onto one oversized page.
+      const papers = [...previewPaperRef.current.querySelectorAll(':scope > .pdf-paper')];
+      await Promise.all(papers.flatMap(paper => [...paper.querySelectorAll('img')]).map(image => image.decode().catch(() => {})));
+      // Non-Chromium browsers need a real downloaded Blob to avoid `temp.pdf`.
+      // Capture each already-paginated A4 preview sheet separately so the
+      // downloaded PDF is visually identical to the preview: same table rows,
+      // PAID slot, BANK ACCOUNT, TTD, and no modal controls.
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-      const pageWidth = 210, pageHeight = 297, margin = 12;
-      const printableWidth = pageWidth - margin * 2, printableHeight = pageHeight - margin * 2;
-      const mmPerPixel = printableWidth / canvas.width;
-      const pagePixels = printableHeight / mmPerPixel;
-      // Exclude the paper's bottom edge/shadow; it is presentation chrome,
-      // not invoice content, and otherwise appears as a stray rule in the PDF.
-      const captureHeight = Math.max(1, canvas.height - 2);
-      const canvasScaleY = canvas.height / element.scrollHeight;
-      const elementTop = element.getBoundingClientRect().top;
-      const safeBreaks = [...element.querySelectorAll('.pdf-table-head, .pdf-table-row')]
-        .map(node => (node.getBoundingClientRect().bottom - elementTop) * canvasScaleY)
-        .filter(y => y > 0 && y < captureHeight)
-        .sort((a, b) => a - b);
-      let startY = 0;
-      let pageNumber = 0;
-      while (startY < captureHeight) {
-        const limitY = Math.min(captureHeight, startY + pagePixels);
-        const earliestBreakY = startY + pagePixels * 0.55;
-        const safeBreakY = safeBreaks.filter(y => y >= earliestBreakY && y <= limitY).pop();
-        const endY = safeBreakY || limitY;
-        // The row/table border can land on the first raster row after a page
-        // break because of antialiasing. Trim only that tiny seam on continuations.
-        const cropTop = pageNumber > 0 ? 2 : 0;
-        const sliceHeight = Math.max(1, Math.ceil(endY - startY - cropTop));
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = sliceHeight;
-        pageCanvas.getContext('2d').drawImage(canvas, 0, startY + cropTop, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
-        if (pageNumber > 0) pdf.addPage();
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.94), 'JPEG', margin, margin, printableWidth, sliceHeight * mmPerPixel, undefined, 'FAST');
-        startY = endY;
-        pageNumber += 1;
+      for (const [index, paper] of papers.entries()) {
+        const canvas = await html2canvas(paper, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          width: paper.clientWidth,
+          height: paper.clientHeight,
+          onclone: clonedDocument => {
+            const clonedPaper = clonedDocument.querySelectorAll('.pdf-paper')[index];
+            if (clonedPaper) {
+              clonedPaper.style.setProperty('box-shadow', 'none', 'important');
+              clonedPaper.style.setProperty('border-radius', '0', 'important');
+            }
+          }
+        });
+        if (index > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
       }
-      pdf.save(`${invoice.number}.pdf`);
+      const filePart = String(invoice.number || 'invoice').replace(/[^a-zA-Z0-9._-]+/g, '-');
+      pdf.save(`Happy Group Invoice - ${filePart}.pdf`);
     } catch (error) {
       console.error('Gagal membuat PDF dari preview:', error);
       alert('PDF belum berhasil dibuat. Silakan coba lagi.');
