@@ -272,7 +272,7 @@ function InvoicePreviewPage({ invoice, bankAccounts, items, continuation, closin
   return <div className={`pdf-paper mobile-invoice ${continuation ? 'preview-continuation' : ''}`}>
     {continuation ? <div className="preview-continuation-top"><img src="/assets/images/happy_group_logo.png"/><div><b>INVOICE</b><span>{invoice.number}</span></div></div> : <><div className="pdf-top"><img src="/assets/images/happy_group_logo.png"/><div className="pdf-company"><b>PT. HAPPY TRANS HARYADI</b><p>Kantor: {invoice.companyAddress}</p><p>0811 2867 917</p></div></div><div className="pdf-rule"/><div className="mobile-bill"><div><span>BILL TO</span><b>{invoice.customer || '-'}</b>{invoice.customerCompany && <p>{invoice.customerCompany}</p>}{invoice.customerPhone && <p>{invoice.customerPhone}</p>}</div><div className="invoice-meta"><h1>INVOICE</h1><p>Invoice #: <b>{invoice.number}</b></p><p>Tanggal: <b>{dateId.format(new Date(`${invoice.issueDate}T00:00:00`))}</b></p></div></div></>}
     {items.length > 0 && <div className="pdf-table"><div className="pdf-table-head"><span style={{textAlign: 'center'}}>ITEMS / DESKRIPSI</span><span>HARGA</span><span>QTY</span><span>TOTAL</span></div>{items.map(item => <div className="pdf-table-row" key={item.id}><div><b>{item.description}</b>{item.detail && <p>{item.detail}</p>}{item.note && <p>{item.note}</p>}</div><span>{IDR.format(Number(item.price || 0))}</span><span>{item.quantity} {unitOf(item)}</span><b>{IDR.format(Number(item.price || 0) * Number(item.quantity || 0))}</b></div>)}</div>}
-    {closing && <><div className="pdf-bottom"><div className="pdf-terms"><span>TERMS</span><p>{invoice.terms}</p></div><div className="pdf-summary"><div><span>Total</span><b>{IDR.format(totalOf(invoice))}</b></div><div><span>Paid</span><b>{IDR.format(paidOf(invoice))}</b></div><div className="due"><span>Amount Due (IDR)</span><b>{IDR.format(dueOf(invoice))}</b></div>{statusOf(invoice) === 'LUNAS' && <img className="paid-stamp" src="/assets/images/paid_stamp.png"/>}</div></div><div className="mobile-lower"><div className="pdf-bank"><span>BANK ACCOUNT</span><p>{(bankAccounts || 'BCA 846-598-6111\nMANDIRI 137.004747.1111\nA/N ARI HARYADI').split('\n').map((line, i) => <React.Fragment key={i}>{line}<br/></React.Fragment>)}</p></div><div className="pdf-sign"><div><span>Hormat kami,</span><b>PT. HAPPY TRANS HARYADI</b><img className={showSignature ? '' : 'signature-hidden'} src="/assets/images/signature_kiki_stamp.png"/><b>Kiki Saputri</b><small>Finance</small></div></div></div></>}
+    {closing && <><div className="pdf-bottom"><div className="pdf-terms"><span>TERMS</span><p>{invoice.terms}</p></div><div className="pdf-summary"><div><span>Total</span><b>{IDR.format(totalOf(invoice))}</b></div><div><span>Paid</span><b>{IDR.format(paidOf(invoice))}</b></div><div className="due"><span>Amount Due (IDR)</span><b>{IDR.format(dueOf(invoice))}</b></div>{statusOf(invoice) === 'LUNAS' && <img className="paid-stamp" src="/assets/images/paid_stamp.png"/>}</div></div><div className="mobile-lower"><div className="pdf-bank"><span>BANK ACCOUNT</span><p>{(bankAccounts || 'BCA 846-598-6111\nMANDIRI 137-00-4747-1111 PT HAPPY TRANS HARYADI\nBCA 8465-688-111 ARI HARYADI').split('\n').map((line, i) => <React.Fragment key={i}>{line}<br/></React.Fragment>)}</p></div><div className="pdf-sign"><div><span>Hormat kami,</span><b>PT. HAPPY TRANS HARYADI</b><img className={showSignature ? '' : 'signature-hidden'} src="/assets/images/signature_kiki_stamp.png"/><b>Kiki Saputri</b><small>Finance</small></div></div></div></>}
   </div>;
 }
 
@@ -396,24 +396,27 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
       pdf.setFont('helvetica','bold'); pdf.text(money(total),190,summaryY+8,{align:'right'}); pdf.text(money(paidTotal),190,summaryY+14,{align:'right'});
       pdf.line(123,summaryY+19,190,summaryY+19); pdf.setFontSize(10); pdf.text('Amount Due (IDR)',123,summaryY+27);
       pdf.setTextColor(...red); pdf.text(money(due),190,summaryY+27,{align:'right'});
-      if (hasStamp) pdf.addImage(paid, 'JPEG', 128, summaryY + 33, 59, 32);
+      // Center the PAID mark in the payment column so it stays symmetrical.
+      if (hasStamp) pdf.addImage(paid, 'JPEG', 132.5, summaryY + 33, 48, 26);
       const termsEndY = termsY + 10 + terms.length * 3.6;
       // The preview pushes BANK ACCOUNT and the signature block to the bottom
       // on a short one-page invoice. TERMS and the payment summary stay directly
       // below the table; only this lower row uses the remaining white space.
-      const lowerRowY = Math.max(termsEndY + 20, 222);
+      // Keep the closing row visibly balanced on the A4 page: it should sit
+      // closer to TERMS/PAID instead of leaving a large empty lower half.
+      const lowerRowY = Math.min(214, Math.max(termsEndY + 16, summaryY + (hasStamp ? 72 : 34)));
       const bankY = lowerRowY;
-      pdf.setTextColor(...red); pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('BANK ACCOUNT', margin, bankY);
-      pdf.setTextColor(...ink); pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.text(bankLines, margin, bankY+8);
+      pdf.setTextColor(...red); pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.text('BANK ACCOUNT', margin, bankY);
+      pdf.setTextColor(...ink); pdf.setFont('helvetica','normal'); pdf.setFontSize(9.5); pdf.text(bankLines, margin, bankY+8, { lineHeightFactor: 1.2 });
       // The bank account stays on the left while the signature stays on the right.
       // When the image is disabled, the same 40x28 mm area remains blank for a
       // future hard-file signature; the surrounding text stays in place.
       const signatureY = lowerRowY;
-      pdf.setTextColor(...ink); pdf.setFontSize(8); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
+      pdf.setTextColor(...ink); pdf.setFontSize(9.5); pdf.text('Hormat kami,', 181, signatureY, {align:'center'});
       pdf.setFont('helvetica','bold'); pdf.text('PT. HAPPY TRANS HARYADI',181,signatureY+5,{align:'center'});
       if (showSignature) pdf.addImage(signature, 'JPEG', 161, signatureY+7, 40, 28);
-      pdf.setFont('helvetica','bold'); pdf.setFontSize(9); pdf.text('Kiki Saputri',181,signatureY+52,{align:'center'});
-      pdf.setFont('helvetica','bold'); pdf.setFontSize(8.5); pdf.setTextColor(...ink); pdf.text('Finance',181,signatureY+57,{align:'center'});
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.text('Kiki Saputri',181,signatureY+52,{align:'center'});
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(9.5); pdf.setTextColor(...ink); pdf.text('Finance',181,signatureY+57,{align:'center'});
       pdf.save(`${invoice.number}.pdf`);
     } finally { setBusy(false); }
   };
