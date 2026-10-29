@@ -310,7 +310,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
   // Export through the exact DOM/CSS used by the preview. The browser print
   // engine creates selectable text and keeps every spacing decision identical.
   const exportPdf = async () => {
-    if (sessionStorage.getItem('server-pdf-export') === '1') {
+    if (sessionStorage.getItem('server-pdf-export') !== '0') {
       setBusy(true);
       try {
         const response = await fetch(`${API}/invoices/${invoice.id}/pdf`, { headers: { Authorization: `Bearer ${JSON.parse(localStorage.getItem('happy-session') || '{}')?.token || ''}` } });
