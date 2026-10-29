@@ -310,6 +310,21 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
   // Export through the exact DOM/CSS used by the preview. The browser print
   // engine creates selectable text and keeps every spacing decision identical.
   const exportPdf = async () => {
+    if (sessionStorage.getItem('server-pdf-export') === '1') {
+      setBusy(true);
+      try {
+        const response = await fetch(`${API}/invoices/${invoice.id}/pdf`, { headers: { Authorization: `Bearer ${JSON.parse(localStorage.getItem('happy-session') || '{}')?.token || ''}` } });
+        if (!response.ok) throw new Error('PDF server gagal dibuat.');
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Happy Group Invoice - ${String(invoice.number || 'invoice').replace(/[^a-zA-Z0-9._-]+/g, '-')}.pdf`;
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (error) { console.error(error); alert(error.message || 'PDF belum berhasil dibuat.'); } finally { setBusy(false); }
+      return;
+    }
     // Safari and Firefox may turn window.print() output into a temporary file
     // and ignore both iframe/document titles. Use the deterministic jsPDF
     // download path there so the browser receives a real filename and Blob.

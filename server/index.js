@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { pool, query } from './db.js';
+import { closeInvoicePdfBrowser, createInvoicePdf, loadInvoicePdfAssets, renderInvoiceHtml } from './invoicePdf.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -101,6 +102,24 @@ app.put('/api/data', requireAuth, allow('admin'), async (req, res) => {
   const conn = await pool.getConnection(); try { await conn.beginTransaction(); await conn.execute('DELETE FROM office_addresses'); for (const address of req.body.addresses || []) await conn.execute('INSERT INTO office_addresses (id, name, full_address) VALUES (?, ?, ?)', [address.id || crypto.randomUUID(), address.name, address.fullAddress]); for (const invoice of req.body.invoices || []) await writeInvoice(conn, invoice, req.user.sub); await conn.commit(); res.json({ ok: true }); } catch (error) { await conn.rollback(); throw error; } finally { conn.release(); }
 });
 app.get('/api/invoices', requireAuth, async (_, res) => res.json(await fetchInvoices()));
+app.get('/api/invoices/:id/pdf', requireAuth, async (req, res, next) => {
+  try {
+    const invoices = await fetchInvoices();
+    const invoice = invoices.find(item => item.id === req.params.id);
+    if (!invoice) return res.status(404).json({ message: 'Invoice tidak ditemukan.' });
+    const settings = await fetchSettings();
+    const assets = await loadInvoicePdfAssets(root);
+    const html = await renderInvoiceHtml(invoice, settings.bankAccounts, assets);
+    const pdf = await createInvoicePdf(html);
+    const filePart = String(invoice.number || 'invoice').replace(/[^a-zA-Z0-9._-]+/g, '-');
+    res.status(200).set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="Happy Group Invoice - ${filePart}.pdf"`,
+      'Content-Length': String(pdf.length),
+      'Cache-Control': 'no-store'
+    }).send(pdf);
+  } catch (error) { next(error); }
+});
 app.post('/api/invoices', requireAuth, async (req, res) => { const conn = await pool.getConnection(); try { await conn.beginTransaction(); const invoice = await writeInvoice(conn, req.body, req.user.sub); await conn.commit(); res.status(201).json(invoice); } catch (error) { await conn.rollback(); if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Nomor invoice sudah digunakan. Muat ulang data, lalu buat invoice kembali.' }); throw error; } finally { conn.release(); } });
 // Every authenticated staff account may remove an invoice. Invoice items and payments
 // are removed automatically through the database's cascading foreign keys.
@@ -118,4 +137,7 @@ app.delete('/api/users/:id', requireAuth, allow('admin'), resolveManageableUser,
 app.use((error, _, res, __) => { console.error(error); res.status(500).json({ message: 'Terjadi kesalahan pada server.' }); });
 if (process.env.NODE_ENV === 'production') { app.use(express.static(path.join(root, 'dist'))); app.use((_, res) => res.sendFile(path.join(root, 'dist', 'index.html'))); }
 const port = process.env.PORT || 4000;
-app.listen(port, () => console.log(`Happy Group API running on port ${port}`));
+const server = app.listen(port, () => console.log(`Happy Group API running on port ${port}`));
+const shutdown = async signal => { console.log(`${signal}: shutting down`); server.close(async () => { await closeInvoicePdfBrowser(); await pool.end(); process.exit(0); }); };
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

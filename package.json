@@ -21,6 +21,7 @@
     "jspdf": "^3.0.3",
     "lucide-react": "^0.468.0",
     "mysql2": "^3.12.0",
+    "puppeteer": "^25.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
