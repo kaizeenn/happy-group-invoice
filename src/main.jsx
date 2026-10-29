@@ -316,13 +316,14 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
     const userAgent = navigator.userAgent || '';
     const isChromium = /Chrome|CriOS|Chromium|Edg\//.test(userAgent);
     const isMobileBrowser = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+    const isMac = /Macintosh|Mac OS X/i.test(userAgent);
     const isSamsungInternet = /SamsungBrowser/i.test(userAgent);
     const isMobileWebView = /; wv\)|\bVersion\/\d+.*Chrome/i.test(userAgent);
-    // Mobile Chrome also uses an iframe viewport that is narrower than the
-    // A4 print sheet, so its native print engine scales the whole invoice down
-    // to half a page. Use the deterministic A4 raster exporter for every
-    // mobile browser; desktop Chromium keeps selectable DOM-print text.
-    const needsDirectDownload = isMobileBrowser || isSamsungInternet || isMobileWebView || (!isChromium && /Firefox|FxiOS|Safari|Macintosh|iPhone|iPad/.test(userAgent));
+    // Mobile Chrome and macOS print previews can open correctly while leaving
+    // the final Print button disabled, or scale the A4 iframe to the viewport.
+    // Use the deterministic A4 download path on mobile and Mac; desktop
+    // Windows/Linux Chromium keeps selectable DOM-print text.
+    const needsDirectDownload = isMobileBrowser || isMac || isSamsungInternet || isMobileWebView || (!isChromium && /Firefox|FxiOS|Safari|Macintosh|iPhone|iPad/.test(userAgent));
     if (needsDirectDownload) return exportPdfRasterLegacy();
     setBusy(true);
     const previousDocumentTitle = document.title;
