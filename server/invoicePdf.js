@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 
@@ -138,7 +139,14 @@ export async function renderInvoiceHtml(invoice, bankAccounts, assets, options =
 export async function createInvoicePdf(html) {
   renderQueue = renderQueue.catch(() => {}).then(async () => {
     if (!browserPromise) {
+      const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || [
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/snap/bin/chromium',
+        '/usr/bin/google-chrome'
+      ].find(candidate => existsSync(candidate));
       browserPromise = puppeteer.launch({
+        ...(executablePath ? { executablePath } : {}),
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none']
       });
