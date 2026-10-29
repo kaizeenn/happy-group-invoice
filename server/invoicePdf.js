@@ -109,7 +109,7 @@ function closingMarkup(invoice, bankAccounts, signatureData, paidData, showSigna
 
 export async function renderInvoiceHtml(invoice, bankAccounts, assets, options = {}) {
   const pages = splitItems(invoice, bankAccounts);
-  const showSignature = options.showSignature !== false;
+  const showSignature = options.showSignature === true;
   const pageMarkup = pages.map((page, index) => {
     const header = page.continuation
       ? `<div class="continuation-header"><img src="${assets.logo}" alt="Happy Group"><div><b>INVOICE</b><span>${escapeHtml(invoice.number)}</span></div></div>`

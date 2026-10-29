@@ -109,7 +109,8 @@ app.get('/api/invoices/:id/pdf', requireAuth, async (req, res, next) => {
     if (!invoice) return res.status(404).json({ message: 'Invoice tidak ditemukan.' });
     const settings = await fetchSettings();
     const assets = await loadInvoicePdfAssets(root);
-    const html = await renderInvoiceHtml(invoice, settings.bankAccounts, assets);
+    const showSignature = req.query.signature !== '0';
+    const html = await renderInvoiceHtml(invoice, settings.bankAccounts, assets, { showSignature });
     const pdf = await createInvoicePdf(html);
     const filePart = String(invoice.number || 'invoice').replace(/[^a-zA-Z0-9._-]+/g, '-');
     res.status(200).set({

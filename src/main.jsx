@@ -313,7 +313,7 @@ function PdfPreview({ invoice, bankAccounts, onClose, onEdit, onAddPayment }) {
     if (sessionStorage.getItem('server-pdf-export') !== '0') {
       setBusy(true);
       try {
-        const response = await fetch(`${API}/invoices/${invoice.id}/pdf`, { headers: { Authorization: `Bearer ${JSON.parse(localStorage.getItem('happy-session') || '{}')?.token || ''}` } });
+        const response = await fetch(`${API}/invoices/${invoice.id}/pdf?signature=${showSignature ? '1' : '0'}`, { headers: { Authorization: `Bearer ${JSON.parse(localStorage.getItem('happy-session') || '{}')?.token || ''}` } });
         if (!response.ok) throw new Error('PDF server gagal dibuat.');
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
